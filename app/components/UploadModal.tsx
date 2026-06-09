@@ -8,7 +8,7 @@ interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   token: string;
-  onUploadSuccess: (result: any) => void;
+  onUploadSuccess: (result: any, latencyMs: number) => void;
 }
 
 export default function UploadModal({ isOpen, onClose, token, onUploadSuccess }: UploadModalProps) {
@@ -145,6 +145,7 @@ export default function UploadModal({ isOpen, onClose, token, onUploadSuccess }:
       formData.append('file', audioBlob, `voice-log-${Date.now()}.webm`);
     }
 
+    const startTime = Date.now();
     try {
       const response = await fetch('/api/extract', {
         method: 'POST',
@@ -155,12 +156,13 @@ export default function UploadModal({ isOpen, onClose, token, onUploadSuccess }:
       });
 
       const result = await response.json();
+      const latencyMs = Date.now() - startTime;
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to extract bill information.');
       }
 
-      onUploadSuccess(result);
+      onUploadSuccess(result, latencyMs);
       onClose();
     } catch (err: any) {
       console.error(err);

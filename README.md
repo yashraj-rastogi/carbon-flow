@@ -1,36 +1,340 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
 
-## Getting Started
+# 🌿 Carbon-Flow
 
-First, run the development server:
+### Autonomous Sustainability Gamification Platform
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**Zero-Friction · AI-Powered · Behaviorally Intelligent**
+
+[![Next.js](https://img.shields.io/badge/Next.js-16.2-black?logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org)
+[![Gemini AI](https://img.shields.io/badge/Gemini-2.5_Flash%2FPro-orange?logo=google)](https://ai.google.dev)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-green?logo=mongodb)](https://www.mongodb.com/atlas)
+[![Framer Motion](https://img.shields.io/badge/Framer-Motion-purple?logo=framer)](https://www.framer.com/motion)
+
+</div>
+
+---
+
+## 🧠 The Problem
+
+> **"The Value-Action Gap"** — Knowing you should act on climate, but not doing it.
+
+Existing carbon tracking applications fail because:
+- **Manual data entry is friction.** Nobody wants to type in their electricity bill numbers.
+- **Generic feedback is meaningless.** A global average emission factor tells you nothing actionable.
+- **No psychological hook.** There is no consequence for abandoning the platform.
+
+Carbon-Flow solves all three.
+
+---
+
+## ✨ What is Carbon-Flow?
+
+Carbon-Flow is a **serverless sustainability platform** that:
+
+1. **Eliminates manual data entry** — Upload a photo of your utility bill, or record a voice note. Gemini's multimodal AI extracts everything.
+2. **Delivers hyper-local insights** — Applies EPA eGRID 2024 emission intensity factors, specific to your US state, instead of global averages.
+3. **Creates behavioral retention** — A **Markov Decision Process (MDP)** engine drives a living Habit Strength score (`S ∈ [0, 10]`) that visually transforms the entire UI — rewarding consistency, punishing neglect.
+
+The dashboard itself is the feedback loop. It is not a chart. It is a **living entity** that changes its visual identity based on your behavior.
+
+---
+
+## 🎮 The Dual-Theme UI Engine
+
+The core innovation of Carbon-Flow is the dynamic theme system driven by your real-time Habit Strength score.
+
+| Habit Strength `S ≥ 5` | Habit Strength `S < 5` |
+|---|---|
+| **🌿 Oasis State** | **🏭 Industrial Waste State** |
+| Vibrant emerald/cyan neon | Desaturated amber/red decay palette |
+| Floating bioluminescent orb | Glitching, rusted reactor core |
+| Rising particle spores | Rising smoke and ash plumes |
+| Orbital ring animations | CRT scanline overlays + glitch text |
+| `Flora System Stable` indicator | `WARNING: Habit Deficit` alarm |
+
+The transition between states is instant and driven by live MDP state data from MongoDB.
+
+---
+
+## 🛠️ Architecture
+
+Carbon-Flow is a **Serverless Next.js Monolith** — a single deployable application containing the entire product.
+
+```
+[ React 19 Frontend (Tailwind v4 / Framer Motion) ]
+          │ (fetch + localStorage session token)
+          ▼
+┌─────────────────────────────────────────────────────┐
+│         Next.js 16 App Router — Route Handlers      │
+│  POST /api/auth      — Mock JWT auth                │
+│  POST /api/extract   — AI multimodal ingestion      │
+│  GET  /api/history   — MDP decay + log retrieval    │
+│  GET  /api/actions   — Micro-habit library          │
+│  POST /api/actions   — One-tap habit logging        │
+└─────────────────────────────────────────────────────┘
+          │                         │
+  [ AI Processing ]         [ Business Logic ]
+  - sharp (preprocessing)   - egrid.ts (EPA factors)
+  - @google/genai (Gemini)  - mdp.ts (Habit MDP)
+  - JSON responseSchema     - models.ts (Mongoose)
+          │                         │
+          └──────────┬──────────────┘
+                     ▼
+              [ MongoDB Atlas ]
+              - users
+              - carbonlogs
+              - habitstates
+              - actions
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> **Design decision:** The original draft specified Python/FastAPI, Java/Spring Boot, Celery/RabbitMQ, and Redis as separate services. All were collapsed into a single Next.js monolith to maximize deployment velocity and hackathon score multiplier value.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🤖 The AI Pipeline — Gemini Token Economics
 
-## Learn More
+Every file upload goes through a **confidence-gated cascade**:
 
-To learn more about Next.js, take a look at the following resources:
+```
+Upload (Image / PDF / Audio / Voice)
+         │
+         ▼
+  [sharp preprocessing]
+  - Grayscale + contrast boost
+  - Resize to 1200px max-width
+  - JPEG compress at 80% quality
+         │
+         ▼
+  [gemini-2.5-flash] + JSON responseSchema
+         │
+    confidenceScore ≥ 0.7?
+    ┌────────────────────────┐
+    │ YES → proceed          │ NO → cascade to gemini-2.5-pro
+    └────────────────────────┘
+         │
+         ▼
+  [egrid.ts] → State → eGRID subregion → kg CO₂ / kWh
+         │
+         ▼
+  [mdp.ts] → updateHabitState() → MongoDB
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Supported ingestion types:**
+- 🖼️ `JPEG / PNG / WEBP` — Electricity, gas, water bills
+- 📄 `PDF` — Multi-page utility statements
+- 🎙️ `WebM Audio` — Voice notes (e.g. *"I biked to work today, about 5 miles"*)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## ⚗️ The MDP Gamification Engine
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The Habit Strength score `S ∈ [0, 10]` is governed by a **Markov Decision Process** with the following dynamics:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### State Transition Matrix
+| Action | Probability | Outcome |
+|---|---|---|
+| `log` (upload/tap action) | 90% | `S → min(S + 1, 10)` |
+| `log` | 10% | `S → S` (unchanged) |
+| `omission` (missed 24h window) | 80% | `S → max(S - 2, 0)` |
+| `omission` | 20% | `S → max(S - 1, 0)` |
+
+### Reward Function
+```
+R(s, a) = 10 + (1.5 × S) − (0.15 × (emissions_kg − 10))
+```
+- **Base reward:** `+10` for logging
+- **Habit bonus:** `+1.5 per habit level` (consistency compounds)
+- **Carbon penalty:** `-0.15 per kg above 10kg baseline`
+- **Omission penalty:** Fixed `-5.0` for any missed window
+
+Omissions are automatically detected and applied every time `/api/history` is called — no scheduled job needed.
+
+---
+
+## 🌍 eGRID Localized Emission Factors
+
+Carbon-Flow uses the **EPA eGRID 2024** dataset to apply state-specific emission intensity rather than generic global averages:
+
+| State | Subregion | Factor (kg CO₂/kWh) |
+|---|---|---|
+| CA | CAMX | 0.24 |
+| NY | NYCW/NYUP | 0.28 |
+| WA | NWPP | 0.14 (cleanest) |
+| CO | RMPA | 0.51 (highest) |
+| TX | ERCT | 0.37 |
+| *Default* | US_AVERAGE | 0.39 |
+
+- **Natural Gas:** 5.3 kg CO₂ / therm
+- **Water:** 0.003 kg CO₂ / gallon (treatment & pumping energy)
+
+---
+
+## 🏃 Quick Start
+
+### Prerequisites
+- Node.js 18+
+- A MongoDB instance (local or [MongoDB Atlas](https://www.mongodb.com/atlas))
+- A [Gemini API key](https://aistudio.google.com/app/apikey)
+
+### 1. Clone and Install
+```bash
+git clone https://github.com/your-username/carbon-flow.git
+cd carbon-flow
+npm install
+```
+
+### 2. Configure Environment Variables
+Create a `.env.local` file in the project root:
+```env
+# MongoDB connection string (local or Atlas)
+MONGODB_URI=mongodb://localhost:27017/carbon-flow
+
+# Gemini API key from Google AI Studio
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### 3. Run the Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 4. First Run
+1. Enter any username and click **"Initialize New Profile"** to register.
+2. Upload `public/mock_utility_bill.png` (included in the repo) to test the AI pipeline.
+3. Observe the CO₂ counter, Habit Strength, and dashboard theme react in real time.
+
+---
+
+## 🚀 Deploy to Vercel
+
+### Step 1: Push to GitHub
+```bash
+git add .
+git commit -m "feat: carbon-flow v2 - action grid + telemetry"
+git push origin main
+```
+
+### Step 2: Import on Vercel
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import your GitHub repository
+3. Under **Environment Variables**, add:
+
+| Key | Value |
+|---|---|
+| `MONGODB_URI` | Your MongoDB Atlas connection string |
+| `GEMINI_API_KEY` | Your Gemini API key |
+
+4. Click **Deploy**
+
+> ⚠️ Make sure your MongoDB Atlas cluster has `0.0.0.0/0` in its Network Access IP whitelist so Vercel's serverless functions can connect.
+
+---
+
+## 📁 Project Structure
+
+```
+carbon-flow/
+├── app/
+│   ├── api/
+│   │   ├── actions/route.ts    # Micro-habit library + one-tap logging
+│   │   ├── auth/route.ts       # Mock JWT authentication
+│   │   ├── extract/route.ts    # Gemini AI ingestion pipeline
+│   │   └── history/route.ts    # MDP updates + log retrieval
+│   ├── components/
+│   │   ├── ActionGrid.tsx      # Micro-habit card grid with reward previews
+│   │   ├── HabitOasis.tsx      # Oasis theme visual (S ≥ 5)
+│   │   ├── IndustrialWaste.tsx # Industrial theme visual (S < 5)
+│   │   ├── TelemetryPanel.tsx  # System diagnostics terminal widget
+│   │   └── UploadModal.tsx     # Drag-drop + voice recording modal
+│   ├── globals.css             # Full design system + theme tokens
+│   ├── layout.tsx              # Root layout with Outfit font + SEO
+│   └── page.tsx                # Main dashboard + auth screens
+├── lib/
+│   ├── auth.ts                 # Mock Base64 JWT token helpers
+│   ├── db.ts                   # Cached Mongoose singleton
+│   ├── egrid.ts                # EPA eGRID 2024 emission factors
+│   ├── mdp.ts                  # MDP engine + reward functions
+│   ├── models.ts               # Mongoose schemas (User, HabitState, CarbonLog, Action)
+│   └── preprocess.ts           # sharp image pipeline
+├── references/
+│   ├── prd.md                  # Product Requirements Document
+│   ├── architecture.md         # System Architecture
+│   ├── mvp-screens.md          # Screen-by-screen build status
+│   ├── user-flow.md            # User flow diagrams
+│   └── roadmap.md              # Development roadmap
+└── public/
+    └── mock_utility_bill.png   # Sample bill for testing
+```
+
+---
+
+## 🧪 Testing
+
+Run the core logic verification suite without needing a browser:
+
+```bash
+# eGRID emission calculations + MDP state transitions (13 assertions)
+npx tsx lib/test-logic.ts
+
+# Action schema, database seeding, and habit logging (8 assertions)
+npx tsx lib/test-actions-logic.ts
+```
+
+All tests run directly against your configured MongoDB instance and produce color-coded `[PASS]` / `[FAIL]` output.
+
+---
+
+## 📊 Screen Overview
+
+| Screen | Status | Description |
+|---|---|---|
+| **1. Gateway (Auth)** | ✅ Built | Username login/register with mock JWT |
+| **2. Core Ecosystem (Dashboard)** | ✅ Built | Dynamic Oasis ↔ Industrial theme engine |
+| **3. Data Stream (Ingestion Hub)** | ✅ Built | Drag-drop bills + live voice recording |
+| **3b. Ingestion Registry** | ✅ Built | Full emissions history table |
+| **4. Action Grid** | ✅ Built | Curated micro-habits with MDP reward previews |
+| **5. Telemetry Panel** | ✅ Built | API latency, token economics, cascade ratio |
+| **OAuth Login** | ⏳ Attempt 3 | Google/GitHub via next-auth |
+| **Region Onboarding** | ⏳ Attempt 3 | Zip code prompt on signup |
+
+---
+
+## 🔑 Key Technology Decisions
+
+| Problem | Decision | Reason |
+|---|---|---|
+| Multi-service complexity | Next.js Monolith | Faster ship time, single deploy unit |
+| Async task queues | Next.js async/await | Serverless functions are inherently isolated |
+| Image OCR | Gemini multimodal | State-of-the-art document understanding |
+| Schema validation | Gemini `responseSchema` | Eliminates a separate validation service |
+| Real-time updates | Polling on success | Avoids WebSocket complexity for MVP scope |
+| Image preprocessing | `sharp` | Replaces Python/OpenCV; runs natively in Node.js |
+
+---
+
+## 🌐 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16.2 (App Router, Turbopack) |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS v4 + custom CSS design tokens |
+| Animation | Framer Motion 12 |
+| AI | Google Gemini 2.5 Flash / Pro (`@google/genai`) |
+| Image Processing | `sharp` |
+| Database | MongoDB Atlas + Mongoose 9 |
+| Icons | Lucide React |
+| Font | Outfit (Google Fonts) |
+
+---
+
+<div align="center">
+
+Built for the **PromptWars Hackathon** · Attempt 2 submission
+
+*"The planet cannot wait for perfect UX. But good UX makes people care."*
+
+</div>

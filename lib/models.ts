@@ -23,7 +23,7 @@ const HabitStateSchema = new Schema({
 // Carbon Log Schema
 const CarbonLogSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, required: true, enum: ['electricity', 'gas', 'water', 'voice_log', 'receipt'] },
+  type: { type: String, required: true, enum: ['electricity', 'gas', 'water', 'voice_log', 'receipt', 'conservation'] },
   fileName: { type: String },
   rawText: { type: String },
   billDetails: {
@@ -41,6 +41,16 @@ const CarbonLogSchema = new Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Action Schema for curated micro-habits
+const ActionSchema = new Schema({
+  name: { type: String, required: true, unique: true },
+  category: { type: String, required: true, enum: ['electricity', 'gas', 'water', 'conservation'] },
+  impactKg: { type: Number, required: true }, // Negative values represent CO2 reduction (savings)
+  icon: { type: String, required: true },     // Lucide icon key
+  description: { type: String, required: true }
+});
+
 export const User = models.User || model('User', UserSchema);
 export const HabitState = models.HabitState || model('HabitState', HabitStateSchema);
 export const CarbonLog = models.CarbonLog || model('CarbonLog', CarbonLogSchema);
+export const Action = models.Action || model('Action', ActionSchema);

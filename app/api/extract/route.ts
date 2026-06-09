@@ -81,6 +81,8 @@ export async function POST(request: Request) {
     const base64Data = fileBuffer.toString('base64');
     let modelName = 'gemini-2.5-flash'; // Standard model
     let extractedJson: any = null;
+    let modelUsed = 'gemini-2.5-flash';
+    let tokenUsage = { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 };
 
     await connectToDatabase();
 
@@ -106,6 +108,12 @@ export async function POST(request: Request) {
 
       extractedJson = JSON.parse(response.text || '{}');
       console.log('Gemini Audio Response:', extractedJson);
+      modelUsed = modelName;
+      tokenUsage = {
+        promptTokens: response.usageMetadata?.promptTokenCount || 0,
+        candidatesTokens: response.usageMetadata?.candidatesTokenCount || 0,
+        totalTokens: response.usageMetadata?.totalTokenCount || 0
+      };
 
       // Cascade logic for low confidence in voice
       if (extractedJson.confidenceScore < 0.7) {
@@ -123,6 +131,12 @@ export async function POST(request: Request) {
           }
         });
         extractedJson = JSON.parse(proResponse.text || '{}');
+        modelUsed = 'gemini-2.5-pro';
+        tokenUsage = {
+          promptTokens: proResponse.usageMetadata?.promptTokenCount || 0,
+          candidatesTokens: proResponse.usageMetadata?.candidatesTokenCount || 0,
+          totalTokens: proResponse.usageMetadata?.totalTokenCount || 0
+        };
       }
 
       // Calculate carbon impact for voice log
@@ -154,7 +168,9 @@ export async function POST(request: Request) {
         dataType: 'voice_log',
         data: extractedJson,
         co2EmissionsKg,
-        mdp: mdpResult
+        mdp: mdpResult,
+        modelUsed,
+        tokenUsage
       });
 
     } else {
@@ -179,6 +195,12 @@ export async function POST(request: Request) {
 
       extractedJson = JSON.parse(response.text || '{}');
       console.log('Gemini Bill Response:', extractedJson);
+      modelUsed = modelName;
+      tokenUsage = {
+        promptTokens: response.usageMetadata?.promptTokenCount || 0,
+        candidatesTokens: response.usageMetadata?.candidatesTokenCount || 0,
+        totalTokens: response.usageMetadata?.totalTokenCount || 0
+      };
 
       // Cascade logic: check if confidence score is low or if PDF has multiple pages (indirectly cascading)
       if (extractedJson.confidenceScore < 0.7) {
@@ -196,6 +218,12 @@ export async function POST(request: Request) {
           }
         });
         extractedJson = JSON.parse(proResponse.text || '{}');
+        modelUsed = 'gemini-2.5-pro';
+        tokenUsage = {
+          promptTokens: proResponse.usageMetadata?.promptTokenCount || 0,
+          candidatesTokens: proResponse.usageMetadata?.candidatesTokenCount || 0,
+          totalTokens: proResponse.usageMetadata?.totalTokenCount || 0
+        };
       }
 
       // Calculate localized emissions
@@ -235,7 +263,9 @@ export async function POST(request: Request) {
         data: extractedJson,
         co2EmissionsKg: calcResult.co2EmissionsKg,
         eGRIDSubregion: calcResult.subregion,
-        mdp: mdpResult
+        mdp: mdpResult,
+        modelUsed,
+        tokenUsage
       });
     }
 

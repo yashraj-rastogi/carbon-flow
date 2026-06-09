@@ -21,6 +21,41 @@ import { motion, AnimatePresence } from 'framer-motion';
 import HabitOasis from './components/HabitOasis';
 import IndustrialWaste from './components/IndustrialWaste';
 import UploadModal from './components/UploadModal';
+import ActionGrid from './components/ActionGrid';
+import TelemetryPanel, { TelemetryData } from './components/TelemetryPanel';
+
+// Physics-based rolling odometer digit
+function Odometer({ value }: { value: number }) {
+  const digits = value.toFixed(1).split('');
+  return (
+    <span className="inline-flex overflow-hidden h-8 items-center text-2xl font-extrabold text-zinc-100 font-mono">
+      {digits.map((digit, i) => {
+        if (digit === '.') {
+          return <span key={i} className="px-0.5">.</span>;
+        }
+        const parsedDigit = parseInt(digit);
+        if (isNaN(parsedDigit)) {
+          return <span key={i}>{digit}</span>;
+        }
+        return (
+          <span key={i} className="relative h-8 w-[14px] overflow-hidden inline-block text-center">
+            <motion.span
+              className="absolute left-0 right-0 flex flex-col"
+              initial={{ y: 0 }}
+              animate={{ y: -parsedDigit * 32 }}
+              transition={{ type: "spring", stiffness: 90, damping: 14 }}
+              style={{ height: '320px', lineHeight: '32px' }}
+            >
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                <span key={num} className="h-8 block text-center select-none">{num}</span>
+              ))}
+            </motion.span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 export default function Dashboard() {
   const [token, setToken] = useState<string | null>(null);
@@ -37,6 +72,15 @@ export default function Dashboard() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
+  const [telemetry, setTelemetry] = useState<TelemetryData>({
+    lastLatencyMs: null,
+    totalPromptTokens: 0,
+    totalOutputTokens: 0,
+    flashCallsCount: 0,
+    proCallsCount: 0,
+    totalRequestsCount: 0
+  });
+
   // Load session from localStorage on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('cf_token');
@@ -46,6 +90,16 @@ export default function Dashboard() {
       setUser(JSON.parse(savedUser));
     } else {
       setLoading(false);
+    }
+
+    // Load telemetry
+    const savedTelemetry = localStorage.getItem('cf_telemetry');
+    if (savedTelemetry) {
+      try {
+        setTelemetry(JSON.parse(savedTelemetry));
+      } catch (err) {
+        console.error('Failed to parse telemetry', err);
+      }
     }
   }, []);
 
@@ -111,10 +165,19 @@ export default function Dashboard() {
   const handleLogout = () => {
     localStorage.removeItem('cf_token');
     localStorage.removeItem('cf_user');
+    localStorage.removeItem('cf_telemetry');
     setToken(null);
     setUser(null);
     setLogs([]);
     setHabitState({ habitStrength: 5, history: [] });
+    setTelemetry({
+      lastLatencyMs: null,
+      totalPromptTokens: 0,
+      totalOutputTokens: 0,
+      flashCallsCount: 0,
+      proCallsCount: 0,
+      totalRequestsCount: 0
+    });
   };
 
   const handleSimulateOmission = async () => {
@@ -141,11 +204,39 @@ export default function Dashboard() {
     }
   };
 
-  const handleUploadSuccess = (result: any) => {
+  const handleUploadSuccess = (result: any, latencyMs: number) => {
     const points = result.mdp?.reward > 0 ? `+${result.mdp.reward}` : result.mdp?.reward;
     setStatusMessage(
       `AI Extraction complete! Extracted ${result.co2EmissionsKg} kg CO2 emission. MDP Reward: ${points} points.`
     );
+
+    setTelemetry(prev => {
+      const isPro = result.modelUsed === 'gemini-2.5-pro';
+      const updated = {
+        lastLatencyMs: latencyMs,
+        totalPromptTokens: prev.totalPromptTokens + (result.tokenUsage?.promptTokens || 0),
+        totalOutputTokens: prev.totalOutputTokens + (result.tokenUsage?.candidatesTokens || 0),
+        flashCallsCount: prev.flashCallsCount + (isPro ? 0 : 1),
+        proCallsCount: prev.proCallsCount + (isPro ? 1 : 0),
+        totalRequestsCount: prev.totalRequestsCount + 1
+      };
+      localStorage.setItem('cf_telemetry', JSON.stringify(updated));
+      return updated;
+    });
+
+    fetchHistory();
+  };
+
+  const handleActionLogged = (result: any, latencyMs: number) => {
+    setTelemetry(prev => {
+      const updated = {
+        ...prev,
+        lastLatencyMs: latencyMs,
+        totalRequestsCount: prev.totalRequestsCount + 1
+      };
+      localStorage.setItem('cf_telemetry', JSON.stringify(updated));
+      return updated;
+    });
     fetchHistory();
   };
 
@@ -283,6 +374,8 @@ export default function Dashboard() {
               </motion.div>
             )}
           </div>
+
+          <TelemetryPanel telemetry={telemetry} />
         </div>
 
         {/* Right Column: Actions and Metrics (12 cols mobile, 7 cols lg) */}
@@ -323,14 +416,21 @@ export default function Dashboard() {
             </div>
           </div>
 
+          <ActionGrid
+            currentHabitStrength={habitStrength}
+            token={token}
+            onActionLogged={handleActionLogged}
+            statusMessageSetter={setStatusMessage}
+          />
+
           {/* Metrics Dashboard */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             
             {/* Total Emissions card */}
             <div className="glass-panel p-4 rounded-xl flex flex-col justify-between">
               <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Total CO2 Logged</span>
-              <div className="mt-2">
-                <span className="text-2xl font-extrabold text-zinc-100">{metrics.totalEmissions?.toFixed(1) || '0.0'}</span>
+              <div className="mt-2 flex items-baseline">
+                <Odometer value={metrics.totalEmissions || 0} />
                 <span className="text-[10px] font-bold text-zinc-400 ml-1">kg</span>
               </div>
             </div>
