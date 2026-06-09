@@ -171,6 +171,23 @@ Carbon-Flow uses the **EPA eGRID 2024** dataset to apply state-specific emission
 
 ---
 
+## 📌 Assumptions
+
+These assumptions were made to scope the MVP to a 48-hour build window:
+
+| Assumption | Rationale |
+|---|---|
+| **US-only emission factors** | EPA eGRID 2024 covers US subregions. International grids were out of scope for Attempt 1. |
+| **State extracted from bill, not user profile** | No onboarding zip code prompt yet — the AI reads state from the uploaded document. Falls back to `US_AVERAGE` if not found. |
+| **Mock JWT authentication** | Username → Base64 token, no password hashing. Suitable for demo; OAuth (Google/GitHub) is planned for Attempt 3. |
+| **Single user session via localStorage** | No multi-device sync. Token is stored client-side; clearing browser storage logs the user out. |
+| **10 kg/day CO₂ baseline** | The reward function penalises emissions above 10 kg/day. This is a rough approximation of the US per-capita daily average — not personalised to household size or income. |
+| **24-hour omission window** | The MDP decay check uses a fixed 24h gap between logs. Real-world habit science would calibrate this per-user. |
+| **Bills are in English** | The Gemini prompt is in English and assumes readable, standard-format utility bills. Handwritten or non-English documents may produce low confidence scores. |
+| **Voice notes describe activities, not measurements** | Audio ingestion relies on Gemini inferring a CO₂ estimate from a natural language description (e.g. "I drove 10 miles"). Accuracy depends on the model's commonsense reasoning. |
+
+---
+
 ## 🏃 Quick Start
 
 ### Prerequisites
