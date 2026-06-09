@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+:root {
+  /* Common Palette */
+  --font-sans: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Oasis Theme (High Habit Strength) */
+  --oasis-bg: #03140f;
+  --oasis-glow: rgba(16, 185, 129, 0.15);
+  --oasis-neon: #10b981; /* Emerald */
+  --oasis-neon-secondary: #06b6d4; /* Cyan */
+  --oasis-text: #e6fcf5;
+  --oasis-card: rgba(4, 34, 25, 0.6);
+  --oasis-border: rgba(16, 185, 129, 0.25);
+
+  /* Industrial Theme (Low Habit Strength) */
+  --ind-bg: #0c0806;
+  --ind-glow: rgba(249, 115, 22, 0.15);
+  --ind-neon: #f97316; /* Amber/Orange */
+  --ind-neon-secondary: #ef4444; /* Red */
+  --ind-text: #fef2f2;
+  --ind-card: rgba(26, 15, 10, 0.65);
+  --ind-border: rgba(249, 115, 22, 0.25);
+  
+  /* Default states point to Oasis (healthy) */
+  --background: var(--oasis-bg);
+  --foreground: var(--oasis-text);
+}
+
+/* Apply prefers-reduced-motion for global transitions */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), color 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Cyberpunk Grid Backgrounds */
+.cyber-grid-oasis {
+  background-image: 
+    linear-gradient(rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center;
+}
+
+.cyber-grid-ind {
+  background-image: 
+    linear-gradient(rgba(249, 115, 22, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(249, 115, 22, 0.04) 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-position: center;
+}
+
+/* Glassmorphism Cards */
+.glass-panel {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Theme states applied via helper classes */
+.theme-oasis {
+  --background: var(--oasis-bg);
+  --foreground: var(--oasis-text);
+  --border-color: var(--oasis-border);
+  --card-bg: var(--oasis-card);
+  --neon-color: var(--oasis-neon);
+  --neon-secondary: var(--oasis-neon-secondary);
+  --neon-glow: var(--oasis-glow);
+}
+
+.theme-industrial {
+  --background: var(--ind-bg);
+  --foreground: var(--ind-text);
+  --border-color: var(--ind-border);
+  --card-bg: var(--ind-card);
+  --neon-color: var(--ind-neon);
+  --neon-secondary: var(--ind-neon-secondary);
+  --neon-glow: var(--ind-glow);
+}
+
+/* Floating Animations for Oasis Objects */
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float-slow {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-15px) rotate(-1.5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.animate-float-slow {
+  animation: float-slow 9s ease-in-out infinite;
+}
+
+/* Pulsing neon glows */
+@keyframes neon-pulse {
+  0%, 100% { box-shadow: 0 0 15px var(--neon-glow), inset 0 0 15px var(--neon-glow); }
+  50% { box-shadow: 0 0 25px var(--neon-color), inset 0 0 10px var(--neon-color); }
+}
+
+.neon-glow-active {
+  animation: neon-pulse 3s infinite alternate;
+}
+
+/* Industrial Glitch & CRT Effects */
+@keyframes glitch {
+  0% {
+    text-shadow: 0.05em 0 0 rgba(239, 68, 68, 0.75), -0.025em -0.05em 0 rgba(249, 115, 22, 0.75),
+      0.025em 0.05em 0 rgba(239, 68, 68, 0.5);
+  }
+  14% {
+    text-shadow: 0.05em 0 0 rgba(239, 68, 68, 0.75), -0.025em -0.05em 0 rgba(249, 115, 22, 0.75),
+      0.025em 0.05em 0 rgba(239, 68, 68, 0.5);
+  }
+  15% {
+    text-shadow: -0.05em -0.025em 0 rgba(239, 68, 68, 0.75), 0.025em 0.025em 0 rgba(249, 115, 22, 0.75),
+      -0.05em -0.05em 0 rgba(239, 68, 68, 0.5);
+  }
+  49% {
+    text-shadow: -0.05em -0.025em 0 rgba(239, 68, 68, 0.75), 0.025em 0.025em 0 rgba(249, 115, 22, 0.75),
+      -0.05em -0.05em 0 rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    text-shadow: 0.025em 0.05em 0 rgba(239, 68, 68, 0.75), 0.05em 0.025em 0 rgba(249, 115, 22, 0.75),
+      0.025em -0.05em 0 rgba(239, 68, 68, 0.5);
+  }
+  99% {
+    text-shadow: 0.025em 0.05em 0 rgba(239, 68, 68, 0.75), 0.05em 0.025em 0 rgba(249, 115, 22, 0.75),
+      0.025em -0.05em 0 rgba(239, 68, 68, 0.5);
+  }
+  100% {
+    text-shadow: -0.025em 0 0 rgba(239, 68, 68, 0.75), -0.025em -0.025em 0 rgba(249, 115, 22, 0.75),
+      -0.025em -0.05em 0 rgba(239, 68, 68, 0.5);
+  }
+}
+
+.glitch-text {
+  animation: glitch 1s infinite;
+}
+
+/* CRT Scanlines Overlay */
+.crt-overlay::after {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 9999;
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+}
+
+/* Custom glow borders */
+.neon-border {
+  border: 1px solid var(--border-color);
+  box-shadow: 0 0 10px rgba(var(--neon-color), 0.15);
+}
+
+.neon-border:hover {
+  border-color: var(--neon-color);
+  box-shadow: 0 0 15px var(--neon-glow);
+}
