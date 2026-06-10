@@ -6,6 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 import { preprocessImage } from '@/lib/preprocess';
 import { calculateEmissions } from '@/lib/egrid';
 import { updateHabitState } from '@/lib/mdp';
+import { CONFIDENCE_THRESHOLD, GEMINI_MODEL_FLASH, GEMINI_MODEL_PRO, MAX_FILE_SIZE_BYTES } from '@/constants';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -58,8 +59,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json({ error: 'File size exceeds maximum limit of 8MB' }, { status: 400 });
+    }
+
     const arrayBuffer = await file.arrayBuffer();
-    let fileBuffer: any = Buffer.from(arrayBuffer);
+    let fileBuffer: Buffer = Buffer.from(arrayBuffer);
     let mimeType = file.type;
     let isAudio = mimeType.startsWith('audio/') || file.name.endsWith('.wav') || file.name.endsWith('.mp3') || file.name.endsWith('.m4a');
     let isPDF = mimeType === 'application/pdf' || file.name.endsWith('.pdf');
@@ -79,9 +84,9 @@ export async function POST(request: Request) {
 
     // Convert to base64 for Gemini payload
     const base64Data = fileBuffer.toString('base64');
-    let modelName = 'gemini-2.5-flash'; // Standard model
-    let extractedJson: any = null;
-    let modelUsed = 'gemini-2.5-flash';
+    let modelName = GEMINI_MODEL_FLASH;
+    let extractedJson: Record<string, unknown> | null = null;
+    let modelUsed = GEMINI_MODEL_FLASH;
     let tokenUsage = { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 };
 
     await connectToDatabase();
@@ -116,10 +121,10 @@ export async function POST(request: Request) {
       };
 
       // Cascade logic for low confidence in voice
-      if (extractedJson.confidenceScore < 0.7) {
+      if (extractedJson && (extractedJson.confidenceScore as number) < CONFIDENCE_THRESHOLD) {
         console.log('Low confidence on audio. Cascading to Gemini 2.5 Pro...');
         const proResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
+          model: GEMINI_MODEL_PRO,
           contents: [
             { inlineData: { data: base64Data, mimeType: mimeType || 'audio/wav' } },
             'Transcribe this audio, identify the sustainability or energy-related action, estimate any carbon impacts, and extract structured fields.'
@@ -131,7 +136,7 @@ export async function POST(request: Request) {
           }
         });
         extractedJson = JSON.parse(proResponse.text || '{}');
-        modelUsed = 'gemini-2.5-pro';
+        modelUsed = GEMINI_MODEL_PRO;
         tokenUsage = {
           promptTokens: proResponse.usageMetadata?.promptTokenCount || 0,
           candidatesTokens: proResponse.usageMetadata?.candidatesTokenCount || 0,
@@ -140,19 +145,19 @@ export async function POST(request: Request) {
       }
 
       // Calculate carbon impact for voice log
-      const co2EmissionsKg = extractedJson.carbonDeltaKg || 0;
+      const co2EmissionsKg = (extractedJson?.carbonDeltaKg as number) || 0;
 
       // Save voice log to database
       const log = new CarbonLog({
         userId: authUser.userId,
         type: 'voice_log',
         fileName: file.name,
-        rawText: extractedJson.transcript,
+        rawText: (extractedJson?.transcript as string) || '',
         billDetails: {
           utilityCompany: 'Voice Log Integration',
           billingPeriod: new Date().toLocaleDateString(),
-          consumption: extractedJson.quantity || 0,
-          units: extractedJson.units || 'units',
+          consumption: (extractedJson?.quantity as number) || 0,
+          units: (extractedJson?.units as string) || 'units',
           state: 'US'
         },
         co2EmissionsKg,
@@ -202,11 +207,11 @@ export async function POST(request: Request) {
         totalTokens: response.usageMetadata?.totalTokenCount || 0
       };
 
-      // Cascade logic: check if confidence score is low or if PDF has multiple pages (indirectly cascading)
-      if (extractedJson.confidenceScore < 0.7) {
+      // Cascade logic: check if confidence score is low
+      if (extractedJson && (extractedJson.confidenceScore as number) < CONFIDENCE_THRESHOLD) {
         console.log('Low confidence on bill extraction. Cascading to Gemini 2.5 Pro...');
         const proResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
+          model: GEMINI_MODEL_PRO,
           contents: [
             { inlineData: { data: base64Data, mimeType: mimeType || 'application/pdf' } },
             'Analyze this utility bill/receipt, find the consumption figures, units (kWh/therms/gallons/etc.), billing period, state, zip code, and utility name.'
@@ -218,7 +223,7 @@ export async function POST(request: Request) {
           }
         });
         extractedJson = JSON.parse(proResponse.text || '{}');
-        modelUsed = 'gemini-2.5-pro';
+        modelUsed = GEMINI_MODEL_PRO;
         tokenUsage = {
           promptTokens: proResponse.usageMetadata?.promptTokenCount || 0,
           candidatesTokens: proResponse.usageMetadata?.candidatesTokenCount || 0,
@@ -228,25 +233,25 @@ export async function POST(request: Request) {
 
       // Calculate localized emissions
       const calcResult = calculateEmissions(
-        extractedJson.billType || 'electricity',
-        extractedJson.consumption || 0,
-        extractedJson.state
+        (extractedJson?.billType as string) || 'electricity',
+        (extractedJson?.consumption as number) || 0,
+        extractedJson?.state as string | undefined
       );
 
       // Save log to database
       const log = new CarbonLog({
         userId: authUser.userId,
-        type: extractedJson.billType || 'electricity',
+        type: (extractedJson?.billType as string) || 'electricity',
         fileName: file.name,
-        rawText: extractedJson.explanation,
+        rawText: (extractedJson?.explanation as string) || '',
         billDetails: {
-          utilityCompany: extractedJson.utilityCompany,
-          billingPeriod: extractedJson.billingPeriod,
-          amountDue: extractedJson.amountDue,
-          consumption: extractedJson.consumption,
-          units: extractedJson.units,
-          zipCode: extractedJson.zipCode,
-          state: extractedJson.state
+          utilityCompany: extractedJson?.utilityCompany as string,
+          billingPeriod: extractedJson?.billingPeriod as string,
+          amountDue: extractedJson?.amountDue as number,
+          consumption: extractedJson?.consumption as number,
+          units: extractedJson?.units as string,
+          zipCode: extractedJson?.zipCode as string,
+          state: extractedJson?.state as string,
         },
         co2EmissionsKg: calcResult.co2EmissionsKg,
         eGRIDSubregion: calcResult.subregion,
@@ -269,8 +274,9 @@ export async function POST(request: Request) {
       });
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Extract API Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

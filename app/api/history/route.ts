@@ -48,9 +48,10 @@ export async function GET(request: Request) {
         logCount: logs.length
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('History API GET Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -76,8 +77,9 @@ export async function POST(request: Request) {
       message: 'Manual omission applied successfully',
       mdp: mdpResult
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('History API POST Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -3,43 +3,44 @@
 import React, { useState, useEffect } from 'react';
 import { Flame, Droplet, Sparkles, Globe, Activity, Plus, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import type { LucideProps } from 'lucide-react';
+import type { ActionItem } from '@/types';
+import { MDP_BASE_REWARD, MDP_HABIT_BONUS_MULTIPLIER, MDP_CARBON_PENALTY_RATE, MDP_CARBON_BASELINE_KG } from '@/constants';
 
-// Map icon strings to Lucide components
-const iconMap: Record<string, any> = {
+/** Map icon strings from the database to Lucide components. */
+const iconMap: Record<string, React.ComponentType<LucideProps>> = {
   Flame,
   Droplet,
   Sparkles,
   Globe,
-  Activity
+  Activity,
 };
-
-interface ActionItem {
-  _id: string;
-  name: string;
-  category: string;
-  impactKg: number;
-  icon: string;
-  description: string;
-}
 
 interface ActionGridProps {
   currentHabitStrength: number;
   token: string;
-  onActionLogged: (result: any, latencyMs: number) => void;
+  onActionLogged: (result: { mdp?: { reward: number; currentStrength: number } }, latencyMs: number) => void;
   statusMessageSetter: (msg: string | null) => void;
 }
 
+/**
+ * Micro-habit action grid component.
+ * Displays curated sustainability actions that users can log with a single tap.
+ * Each card shows a reward preview calculated from the current MDP state.
+ *
+ * Accessible: uses role="list"/"listitem" semantics, descriptive aria-labels
+ * on action buttons, and aria-busy for loading states.
+ */
 export default function ActionGrid({
   currentHabitStrength,
   token,
   onActionLogged,
-  statusMessageSetter
+  statusMessageSetter,
 }: ActionGridProps) {
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingId, setLoggingId] = useState<string | null>(null);
 
-  // Fetch actions on mount
   useEffect(() => {
     fetchActions();
   }, []);
@@ -51,8 +52,8 @@ export default function ActionGrid({
       if (res.ok) {
         setActions(data.actions || []);
       }
-    } catch (err) {
-      console.error('Failed to fetch actions', err);
+    } catch (error: unknown) {
+      console.error('Failed to fetch actions', error);
     } finally {
       setLoading(false);
     }
@@ -69,9 +70,9 @@ export default function ActionGrid({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ actionId: action._id })
+        body: JSON.stringify({ actionId: action._id }),
       });
       const data = await res.json();
       const latencyMs = Date.now() - startTime;
@@ -85,24 +86,22 @@ export default function ActionGrid({
       } else {
         statusMessageSetter(`Error: ${data.error || 'Failed to log action'}`);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error: unknown) {
+      console.error(error);
       statusMessageSetter('Failed to log action due to server error');
     } finally {
       setLoggingId(null);
     }
   };
 
-  // Helper to calculate reward preview
-  const getRewardPreview = (impactKg: number) => {
-    const baseReward = 10.0;
-    const habitBonus = 1.5 * currentHabitStrength;
-    // impactKg is negative for savings (e.g. -1.2), which boosts reward
-    const carbonImpact = -0.15 * (impactKg - 10);
-    return parseFloat((baseReward + habitBonus + carbonImpact).toFixed(2));
+  /** Calculate MDP reward preview for a given action impact. */
+  const getRewardPreview = (impactKg: number): number => {
+    const habitBonus = MDP_HABIT_BONUS_MULTIPLIER * currentHabitStrength;
+    const carbonImpact = -MDP_CARBON_PENALTY_RATE * (impactKg - MDP_CARBON_BASELINE_KG);
+    return parseFloat((MDP_BASE_REWARD + habitBonus + carbonImpact).toFixed(2));
   };
 
-  // Helper to get category classes
+  /** Get category-specific styling classes. */
   const getCategoryStyles = (category: string) => {
     switch (category) {
       case 'gas':
@@ -110,46 +109,48 @@ export default function ActionGrid({
           border: 'border-orange-500/20 hover:border-orange-500/50',
           glow: 'hover:shadow-[0_0_15px_rgba(249,115,22,0.15)] bg-orange-950/5 hover:bg-orange-950/10',
           text: 'text-orange-400',
-          iconBg: 'bg-orange-500/10 border-orange-500/20'
+          iconBg: 'bg-orange-500/10 border-orange-500/20',
         };
       case 'water':
         return {
           border: 'border-cyan-500/20 hover:border-cyan-500/50',
           glow: 'hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] bg-cyan-950/5 hover:bg-cyan-950/10',
           text: 'text-cyan-400',
-          iconBg: 'bg-cyan-500/10 border-cyan-500/20'
+          iconBg: 'bg-cyan-500/10 border-cyan-500/20',
         };
       case 'electricity':
         return {
           border: 'border-yellow-500/20 hover:border-yellow-500/50',
           glow: 'hover:shadow-[0_0_15px_rgba(234,179,8,0.15)] bg-yellow-950/5 hover:bg-yellow-950/10',
           text: 'text-yellow-400',
-          iconBg: 'bg-yellow-500/10 border-yellow-500/20'
+          iconBg: 'bg-yellow-500/10 border-yellow-500/20',
         };
-      default: // conservation
+      default:
         return {
           border: 'border-emerald-500/20 hover:border-emerald-500/50',
           glow: 'hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] bg-emerald-950/5 hover:bg-emerald-950/10',
           text: 'text-emerald-400',
-          iconBg: 'bg-emerald-500/10 border-emerald-500/20'
+          iconBg: 'bg-emerald-500/10 border-emerald-500/20',
         };
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
-        <span className="text-xs text-zinc-500 ml-2 font-mono">&gt; Synching Action Library...</span>
+      <div className="flex items-center justify-center py-8" aria-busy="true" aria-label="Loading actions">
+        <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" aria-hidden="true" />
+        <span className="text-xs text-zinc-400 ml-2 font-mono">&gt; Synching Action Library...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <h3 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">Micro-Habit Library</h3>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="flex flex-col gap-4" role="region" aria-label="Micro-habit library">
+      <h2 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
+        Micro-Habit Library
+      </h2>
+
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4" role="list">
         {actions.map((action) => {
           const styles = getCategoryStyles(action.category);
           const Icon = iconMap[action.icon] || Globe;
@@ -157,26 +158,36 @@ export default function ActionGrid({
           const isLogging = loggingId === action._id;
 
           return (
-            <motion.div
+            <motion.li
               key={action._id}
               className={`p-4 rounded-xl border ${styles.border} ${styles.glow} transition-all duration-300 flex items-start justify-between gap-4`}
               whileHover={{ y: -2 }}
+              role="listitem"
             >
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${styles.iconBg} ${styles.text}`}>
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center border ${styles.iconBg} ${styles.text}`}
+                    aria-hidden="true"
+                  >
                     <Icon className="w-4 h-4" />
                   </div>
-                  <h4 className="text-xs font-bold text-zinc-100 uppercase tracking-widest">{action.name}</h4>
+                  <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-widest">
+                    {action.name}
+                  </h3>
                 </div>
-                <p className="text-[10px] text-zinc-400 leading-relaxed mb-3">{action.description}</p>
-                
+                <p className="text-[11px] text-zinc-400 leading-relaxed mb-3">
+                  {action.description}
+                </p>
+
                 {/* Metrics Badges */}
                 <div className="flex items-center gap-2">
-                  <span className={`text-[9px] px-2 py-0.5 rounded border bg-zinc-950/60 font-mono font-bold ${styles.text} border-zinc-800`}>
+                  <span
+                    className={`text-[11px] px-2 py-0.5 rounded border bg-zinc-950/60 font-mono font-bold ${styles.text} border-zinc-800`}
+                  >
                     {action.impactKg.toFixed(1)} kg CO₂
                   </span>
-                  <span className="text-[9px] px-2 py-0.5 rounded border bg-zinc-950/60 font-mono font-bold text-emerald-400 border-zinc-800">
+                  <span className="text-[11px] px-2 py-0.5 rounded border bg-zinc-950/60 font-mono font-bold text-emerald-400 border-zinc-800">
                     +{rewardPreview} pts preview
                   </span>
                 </div>
@@ -189,18 +200,19 @@ export default function ActionGrid({
                 className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 hover:bg-zinc-900 active:scale-95 disabled:opacity-50 text-zinc-400 hover:text-emerald-400 ${
                   isLogging ? 'text-emerald-400 border-emerald-500/50' : ''
                 }`}
-                title="Log completed action"
+                aria-label={`Log completed action: ${action.name}`}
+                aria-busy={isLogging}
               >
                 {isLogging ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4" aria-hidden="true" />
                 )}
               </button>
-            </motion.div>
+            </motion.li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }

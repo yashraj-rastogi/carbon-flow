@@ -1,9 +1,24 @@
+/**
+ * EPA eGRID 2024 emission factors for US electricity generation.
+ * Maps US state codes to their subregion and CO₂ intensity factor.
+ * @module egrid
+ */
+
+/** Emission factor for a specific eGRID subregion. */
 export interface EmissionFactor {
+  /** EPA eGRID subregion identifier (e.g., 'CAMX', 'ERCT'). */
   subregion: string;
-  factorKgPerKwh: number; // kg CO2 per kWh
+  /** CO₂ emission intensity in kg CO₂ per kWh of electricity consumed. */
+  factorKgPerKwh: number;
 }
 
-// eGRID 2024 mapping for selected states
+/**
+ * eGRID 2024 state-to-subregion mapping for selected US states.
+ *
+ * Source: EPA eGRID 2024 — https://www.epa.gov/egrid
+ * Values represent the annual average CO₂ output emission rate (kg/kWh)
+ * for the subregion serving each state's primary load.
+ */
 export const EGRID_MAPPING: Record<string, EmissionFactor> = {
   CA: { subregion: 'CAMX', factorKgPerKwh: 0.24 },
   NY: { subregion: 'NYCW/NYUP', factorKgPerKwh: 0.28 },
@@ -18,21 +33,36 @@ export const EGRID_MAPPING: Record<string, EmissionFactor> = {
   PA: { subregion: 'RFCE', factorKgPerKwh: 0.31 },
 };
 
+/** Default US average electricity emission factor when state is unknown. */
 export const DEFAULT_ELECTRICITY_FACTOR: EmissionFactor = {
   subregion: 'US_AVERAGE',
   factorKgPerKwh: 0.39,
 };
 
-// Natural Gas: kg CO2 per therm (1 therm = 29.3 kWh equivalent)
+/** Natural gas emission factor: kg CO₂ per therm (1 therm ≈ 29.3 kWh). */
 export const GAS_FACTOR_KG_PER_THERM = 5.3;
 
-// Water: kg CO2 per gallon (energy used for treatment & pumping)
+/** Water treatment emission factor: kg CO₂ per gallon (pumping & treatment energy). */
 export const WATER_FACTOR_KG_PER_GALLON = 0.003;
 
 /**
- * Calculates emission based on utility type, consumption, and state.
+ * Calculates carbon emissions for a given utility consumption.
+ *
+ * Supports three utility types:
+ * - **electricity**: Uses state-specific eGRID factors (or US average fallback)
+ * - **gas**: Uses fixed therm-to-CO₂ conversion
+ * - **water**: Uses fixed gallon-to-CO₂ conversion (treatment energy)
+ *
+ * @param type - Utility type: 'electricity', 'gas', or 'water'.
+ * @param consumption - Numeric consumption amount in native units (kWh/therms/gallons).
+ * @param state - Optional two-letter US state code for localized electricity factors.
+ * @returns Calculated emissions in kg CO₂, the eGRID subregion (if applicable), and the factor used.
  */
-export function calculateEmissions(type: string, consumption: number, state?: string): {
+export function calculateEmissions(
+  type: string,
+  consumption: number,
+  state?: string
+): {
   co2EmissionsKg: number;
   subregion?: string;
   factor: number;

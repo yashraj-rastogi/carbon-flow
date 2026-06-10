@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { User, HabitState } from '@/lib/models';
 import { generateToken } from '@/lib/auth';
+import { MAX_USERNAME_LENGTH, MDP_INITIAL_STRENGTH } from '@/constants';
 
 export async function POST(request: Request) {
   try {
@@ -9,8 +10,12 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const { username, email, action } = body;
 
-    if (!username) {
+    if (!username || typeof username !== 'string') {
       return NextResponse.json({ error: 'Username is required' }, { status: 400 });
+    }
+
+    if (username.length > MAX_USERNAME_LENGTH) {
+      return NextResponse.json({ error: `Username must be ${MAX_USERNAME_LENGTH} characters or fewer` }, { status: 400 });
     }
 
     let user = await User.findOne({ username });
@@ -29,7 +34,7 @@ export async function POST(request: Request) {
       // Initialize Habit State for the new user
       const habitState = new HabitState({
         userId: user._id,
-        habitStrength: 5,
+        habitStrength: MDP_INITIAL_STRENGTH,
         lastLoggedAt: new Date(),
         history: [],
       });
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
 
         const habitState = new HabitState({
           userId: user._id,
-          habitStrength: 5,
+          habitStrength: MDP_INITIAL_STRENGTH,
           lastLoggedAt: new Date(),
           history: [],
         });
@@ -64,8 +69,9 @@ export async function POST(request: Request) {
         email: user.email
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Auth API Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

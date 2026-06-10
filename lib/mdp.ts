@@ -1,45 +1,61 @@
 import { HabitState } from './models';
 import { connectToDatabase } from './db';
+import {
+  MDP_MAX_STRENGTH,
+  MDP_INITIAL_STRENGTH,
+  MDP_OMISSION_PENALTY,
+  MDP_BASE_REWARD,
+  MDP_HABIT_BONUS_MULTIPLIER,
+  MDP_CARBON_PENALTY_RATE,
+  MDP_CARBON_BASELINE_KG,
+  MDP_MAX_HISTORY_LENGTH,
+  MDP_LOG_SUCCESS_PROB,
+  MDP_OMISSION_MAJOR_PROB,
+  OMISSION_WINDOW_HOURS,
+} from '@/constants';
 
 /**
- * Transitions the Habit Strength state using the Markov Decision Process (MDP) dynamics.
- * 
- * State Space: S in [0, 10]
- * Actions: 'log' or 'omission'
- * 
- * Transition Dynamics:
- * - On 'log':
- *   - 90% chance: S_{t+1} = min(S_t + 1, 10)
- *   - 10% chance: S_{t+1} = S_t
- * - On 'omission':
- *   - 80% chance: S_{t+1} = max(S_t - 2, 0)
- *   - 20% chance: S_{t+1} = max(S_t - 1, 0)
+ * Transitions the Habit Strength state using Markov Decision Process dynamics.
+ *
+ * State Space: S ∈ [0, {@link MDP_MAX_STRENGTH}]
+ *
+ * Transition probabilities:
+ * - **log**: 90% → S+1, 10% → S (unchanged)
+ * - **omission**: 80% → S-2, 20% → S-1
+ *
+ * @param currentStrength - Current habit strength level.
+ * @param action - The MDP action performed ('log' or 'omission').
+ * @returns The next strength value and the probability of the chosen transition.
  */
-export function transitionHabit(currentStrength: number, action: 'log' | 'omission'): {
-  nextStrength: number;
-  probability: number;
-} {
+export function transitionHabit(
+  currentStrength: number,
+  action: 'log' | 'omission'
+): { nextStrength: number; probability: number } {
   const rand = Math.random();
 
   if (action === 'log') {
-    if (rand < 0.9) {
-      return { nextStrength: Math.min(currentStrength + 1, 10), probability: 0.9 };
-    } else {
-      return { nextStrength: currentStrength, probability: 0.1 };
+    if (rand < MDP_LOG_SUCCESS_PROB) {
+      return { nextStrength: Math.min(currentStrength + 1, MDP_MAX_STRENGTH), probability: MDP_LOG_SUCCESS_PROB };
     }
-  } else {
-    // omission
-    if (rand < 0.8) {
-      return { nextStrength: Math.max(currentStrength - 2, 0), probability: 0.8 };
-    } else {
-      return { nextStrength: Math.max(currentStrength - 1, 0), probability: 0.2 };
-    }
+    return { nextStrength: currentStrength, probability: 1 - MDP_LOG_SUCCESS_PROB };
   }
+
+  // omission
+  if (rand < MDP_OMISSION_MAJOR_PROB) {
+    return { nextStrength: Math.max(currentStrength - 2, 0), probability: MDP_OMISSION_MAJOR_PROB };
+  }
+  return { nextStrength: Math.max(currentStrength - 1, 0), probability: 1 - MDP_OMISSION_MAJOR_PROB };
 }
 
 /**
- * Calculates the reward for the MDP state transition.
- * R(s, a) = Base + (Gamma * HabitStrength) - (Beta * CarbonEmissions)
+ * Calculates the reward for an MDP state transition.
+ *
+ * Formula: R(s, a) = Base + (γ × HabitStrength) − (β × (emissions − baseline))
+ *
+ * @param state - Current habit strength at time of action.
+ * @param action - The MDP action ('log' or 'omission').
+ * @param emissionsKg - CO₂ emissions associated with this log (default 0).
+ * @returns The calculated reward value.
  */
 export function calculateReward(
   state: number,
@@ -47,19 +63,25 @@ export function calculateReward(
   emissionsKg: number = 0
 ): number {
   if (action === 'omission') {
-    return -5.0; // Fixed penalty for omission
+    return MDP_OMISSION_PENALTY;
   }
 
-  const baseReward = 10.0;
-  const habitBonus = 1.5 * state;
-  // Penalize higher emissions (relative to a 10kg daily average baseline)
-  const carbonImpact = -0.15 * (emissionsKg - 10);
+  const habitBonus = MDP_HABIT_BONUS_MULTIPLIER * state;
+  const carbonImpact = -MDP_CARBON_PENALTY_RATE * (emissionsKg - MDP_CARBON_BASELINE_KG);
 
-  return parseFloat((baseReward + habitBonus + carbonImpact).toFixed(2));
+  return parseFloat((MDP_BASE_REWARD + habitBonus + carbonImpact).toFixed(2));
 }
 
 /**
- * Main function to update a user's Habit State in MongoDB.
+ * Updates a user's Habit State in MongoDB by performing an MDP transition.
+ *
+ * Creates the habit state document if it doesn't exist (default strength = {@link MDP_INITIAL_STRENGTH}).
+ * Caps the history array at {@link MDP_MAX_HISTORY_LENGTH} entries.
+ *
+ * @param userId - The MongoDB user ID.
+ * @param action - The MDP action ('log' or 'omission').
+ * @param emissionsKg - CO₂ emissions for reward calculation (default 0).
+ * @returns The transition result with previous/current strength, reward, and history.
  */
 export async function updateHabitState(
   userId: string,
@@ -73,9 +95,9 @@ export async function updateHabitState(
   if (!habitState) {
     habitState = new HabitState({
       userId,
-      habitStrength: 5, // Starts at middle ground
+      habitStrength: MDP_INITIAL_STRENGTH,
       lastLoggedAt: new Date(),
-      history: []
+      history: [],
     });
   }
 
@@ -89,11 +111,11 @@ export async function updateHabitState(
     date: new Date(),
     habitStrength: nextStrength,
     action,
-    reward
+    reward,
   });
 
-  // Keep history array capped at 100 items for performance
-  if (habitState.history.length > 100) {
+  // Keep history capped for performance
+  if (habitState.history.length > MDP_MAX_HISTORY_LENGTH) {
     habitState.history.shift();
   }
 
@@ -103,23 +125,27 @@ export async function updateHabitState(
     previousStrength: currentStrength,
     currentStrength: nextStrength,
     reward,
-    history: habitState.history
+    history: habitState.history,
   };
 }
 
 /**
- * Checks if the user missed any logging windows and applies omissions.
- * For this simplified version, if lastLoggedAt was > 24 hours ago, we apply omissions.
+ * Checks if the user has missed any logging windows and applies omission penalties.
+ *
+ * Each missed {@link OMISSION_WINDOW_HOURS}-hour window triggers an omission transition.
+ * Multiple consecutive windows are applied sequentially.
+ *
+ * @param userId - The MongoDB user ID.
+ * @returns Omission update result, or null if no omissions were needed.
  */
 export async function processOmissionsIfOverdue(userId: string) {
   await connectToDatabase();
   const habitState = await HabitState.findOne({ userId });
   if (!habitState) return null;
 
-  const hoursSinceLastLog = (Date.now() - new Date(habitState.lastLoggedAt).getTime()) / (1000 * 60 * 60);
-  
-  // A logging window is 24 hours. We calculate how many full 24hr windows were missed.
-  const omissionsToApply = Math.floor(hoursSinceLastLog / 24);
+  const hoursSinceLastLog =
+    (Date.now() - new Date(habitState.lastLoggedAt).getTime()) / (1000 * 60 * 60);
+  const omissionsToApply = Math.floor(hoursSinceLastLog / OMISSION_WINDOW_HOURS);
 
   if (omissionsToApply > 0) {
     let currentStrength = habitState.habitStrength;
@@ -128,27 +154,27 @@ export async function processOmissionsIfOverdue(userId: string) {
     for (let i = 0; i < omissionsToApply; i++) {
       const { nextStrength } = transitionHabit(currentStrength, 'omission');
       const reward = calculateReward(currentStrength, 'omission');
-      
+
       currentStrength = nextStrength;
       totalReward += reward;
 
       habitState.history.push({
-        date: new Date(new Date(habitState.lastLoggedAt).getTime() + (i + 1) * 24 * 60 * 60 * 1000),
+        date: new Date(
+          new Date(habitState.lastLoggedAt).getTime() + (i + 1) * OMISSION_WINDOW_HOURS * 60 * 60 * 1000
+        ),
         habitStrength: nextStrength,
         action: 'omission',
-        reward
+        reward,
       });
     }
 
     habitState.habitStrength = currentStrength;
-    // Advance the lastLoggedAt by the applied omission intervals
-    habitState.lastLoggedAt = new Date(new Date(habitState.lastLoggedAt).getTime() + omissionsToApply * 24 * 60 * 60 * 1000);
+    habitState.lastLoggedAt = new Date(
+      new Date(habitState.lastLoggedAt).getTime() + omissionsToApply * OMISSION_WINDOW_HOURS * 60 * 60 * 1000
+    );
     await habitState.save();
 
-    return {
-      appliedOmissionsCount: omissionsToApply,
-      currentStrength
-    };
+    return { appliedOmissionsCount: omissionsToApply, currentStrength };
   }
 
   return null;
