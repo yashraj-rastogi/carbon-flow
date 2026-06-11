@@ -1,4 +1,5 @@
 import { HabitState } from './models';
+import type { MdpTransitionResult } from '@/types';
 import { connectToDatabase } from './db';
 import {
   MDP_MAX_STRENGTH,
@@ -87,7 +88,7 @@ export async function updateHabitState(
   userId: string,
   action: 'log' | 'omission',
   emissionsKg: number = 0
-) {
+): Promise<MdpTransitionResult> {
   await connectToDatabase();
 
   let habitState = await HabitState.findOne({ userId });
@@ -138,7 +139,9 @@ export async function updateHabitState(
  * @param userId - The MongoDB user ID.
  * @returns Omission update result, or null if no omissions were needed.
  */
-export async function processOmissionsIfOverdue(userId: string) {
+export async function processOmissionsIfOverdue(
+  userId: string
+): Promise<{ appliedOmissionsCount: number; currentStrength: number } | null> {
   await connectToDatabase();
   const habitState = await HabitState.findOne({ userId });
   if (!habitState) return null;
@@ -149,14 +152,12 @@ export async function processOmissionsIfOverdue(userId: string) {
 
   if (omissionsToApply > 0) {
     let currentStrength = habitState.habitStrength;
-    let totalReward = 0;
 
     for (let i = 0; i < omissionsToApply; i++) {
       const { nextStrength } = transitionHabit(currentStrength, 'omission');
       const reward = calculateReward(currentStrength, 'omission');
 
       currentStrength = nextStrength;
-      totalReward += reward;
 
       habitState.history.push({
         date: new Date(

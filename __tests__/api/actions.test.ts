@@ -2,10 +2,9 @@
  * @jest-environment node
  */
 import { GET, POST } from '@/app/api/actions/route';
-import { Action, CarbonLog } from '@/lib/models';
+import { Action } from '@/lib/models';
 import { getAuthUser } from '@/lib/auth';
 import { updateHabitState } from '@/lib/mdp';
-import { connectToDatabase } from '@/lib/db';
 
 jest.mock('@/lib/db', () => ({
   connectToDatabase: jest.fn().mockResolvedValue(true),
@@ -21,7 +20,7 @@ jest.mock('@/lib/mdp', () => ({
 
 jest.mock('@/lib/models', () => {
   const mockSave = jest.fn().mockResolvedValue(true);
-  const mockCarbonLog = jest.fn().mockImplementation((data) => ({
+  const mockCarbonLog = jest.fn().mockImplementation((data: Record<string, unknown>) => ({
     ...data,
     save: mockSave,
   }));
@@ -46,8 +45,7 @@ describe('Actions API Endpoint (/api/actions)', () => {
       const mockActions = [{ name: 'Test Action', category: 'gas', impactKg: -1.2 }];
       (Action.find as jest.Mock).mockResolvedValueOnce(mockActions);
 
-      const request = new Request('http://localhost/api/actions');
-      const response = await GET(request);
+      const response = await GET();
 
       expect(response.status).toBe(200);
       const json = await response.json();
@@ -61,8 +59,7 @@ describe('Actions API Endpoint (/api/actions)', () => {
         .mockResolvedValueOnce([]) // Empty first find
         .mockResolvedValueOnce([{ name: 'Seeded Action' }]); // Return seeded after insert
 
-      const request = new Request('http://localhost/api/actions');
-      const response = await GET(request);
+      const response = await GET();
 
       expect(response.status).toBe(200);
       expect(Action.insertMany).toHaveBeenCalled();

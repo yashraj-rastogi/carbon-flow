@@ -27,6 +27,35 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), geolocation=(), microphone=(self)',
           },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "connect-src 'self' https://generativelanguage.googleapis.com",
+              "media-src 'self' blob:",
+              "font-src 'self' https://fonts.gstatic.com",
+            ].join('; '),
+          },
+        ],
+      },
+      {
+        source: '/api/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate',
+          },
+          {
+            key: 'X-RateLimit-Limit',
+            value: '100',
+          },
         ],
       },
     ];

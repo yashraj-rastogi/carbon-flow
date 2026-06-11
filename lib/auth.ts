@@ -22,7 +22,7 @@ export function getAuthUser(request: Request): AuthUser | null {
       return user as AuthUser;
     }
     return null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

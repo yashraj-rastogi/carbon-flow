@@ -1,85 +1,115 @@
-import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import { CarbonLog, HabitState } from '@/lib/models';
-import { getAuthUser } from '@/lib/auth';
 import { processOmissionsIfOverdue, updateHabitState } from '@/lib/mdp';
+import type { CategoryEmissions } from '@/types';
+import {
+  authenticateRequest,
+  createSuccessResponse,
+  createErrorResponse,
+  getErrorMessage,
+  parseJsonBody,
+} from '@/lib/api-utils';
 
-export async function GET(request: Request) {
-  try {
-    const authUser = getAuthUser(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+/** Allowed manual actions for the POST endpoint. */
+const ALLOWED_MANUAL_ACTIONS = ['omission'] as const;
+
+/**
+ * Aggregates emission totals from a list of carbon log documents.
+ *
+ * @param logs - Array of carbon log documents from MongoDB.
+ * @returns Total emissions and per-category breakdown.
+ */
+function aggregateEmissions(
+  logs: Array<{ co2EmissionsKg: number; type: string }>
+): { totalEmissions: number; categoryEmissions: CategoryEmissions } {
+  let totalEmissions = 0;
+  const categoryEmissions: CategoryEmissions = {
+    electricity: 0,
+    gas: 0,
+    water: 0,
+    voice_log: 0,
+    receipt: 0,
+  };
+
+  for (const log of logs) {
+    totalEmissions += log.co2EmissionsKg;
+    const type = log.type as keyof CategoryEmissions;
+    if (type in categoryEmissions) {
+      categoryEmissions[type] += log.co2EmissionsKg;
     }
+  }
+
+  return { totalEmissions, categoryEmissions };
+}
+
+/**
+ * GET /api/history
+ *
+ * Returns the user's carbon logs, current habit state, and aggregated metrics.
+ * Automatically applies any overdue omission penalties before returning data.
+ */
+export async function GET(request: Request): Promise<Response> {
+  try {
+    const [authUser, authError] = authenticateRequest(request);
+    if (authError) return authError;
 
     await connectToDatabase();
-    const userId = authUser.userId;
+    const userId = authUser!.userId;
 
-    // 1. Process any overdue daily logging windows to apply omissions
+    // 1. Process overdue omissions
     const omissionUpdate = await processOmissionsIfOverdue(userId);
     if (omissionUpdate) {
-      console.log(`Applied ${omissionUpdate.appliedOmissionsCount} overdue omissions. New habit strength: ${omissionUpdate.currentStrength}`);
+      console.log(
+        `Applied ${omissionUpdate.appliedOmissionsCount} overdue omissions. New habit strength: ${omissionUpdate.currentStrength}`
+      );
     }
 
-    // 2. Fetch logs and habit state
+    // 2. Fetch logs and habit state in parallel
     const [logs, habitState] = await Promise.all([
       CarbonLog.find({ userId }).sort({ createdAt: -1 }).limit(50),
-      HabitState.findOne({ userId })
+      HabitState.findOne({ userId }),
     ]);
 
-    // 3. Calculate metrics for the dashboard
-    let totalEmissions = 0;
-    let categoryEmissions = { electricity: 0, gas: 0, water: 0, voice_log: 0, receipt: 0 };
-    
-    logs.forEach(log => {
-      totalEmissions += log.co2EmissionsKg;
-      const type = log.type as keyof typeof categoryEmissions;
-      if (type in categoryEmissions) {
-        categoryEmissions[type] += log.co2EmissionsKg;
-      }
-    });
+    // 3. Aggregate metrics
+    const { totalEmissions, categoryEmissions } = aggregateEmissions(logs);
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       logs,
       habitState: habitState || { habitStrength: 5, history: [] },
-      metrics: {
-        totalEmissions,
-        categoryEmissions,
-        logCount: logs.length
-      }
+      metrics: { totalEmissions, categoryEmissions, logCount: logs.length },
     });
   } catch (error: unknown) {
     console.error('History API GET Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createErrorResponse(getErrorMessage(error));
   }
 }
 
-// Support manual action override (e.g. testing an omission or adding a manual entry)
-export async function POST(request: Request) {
+/**
+ * POST /api/history
+ *
+ * Supports manual MDP actions (e.g., simulating an omission for testing).
+ */
+export async function POST(request: Request): Promise<Response> {
   try {
-    const authUser = getAuthUser(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const [authUser, authError] = authenticateRequest(request);
+    if (authError) return authError;
 
-    const { action } = await request.json().catch(() => ({}));
-    if (action !== 'omission') {
-      return NextResponse.json({ error: 'Invalid manual action' }, { status: 400 });
+    const body = await parseJsonBody(request);
+    const { action } = body;
+
+    if (!ALLOWED_MANUAL_ACTIONS.includes(action as typeof ALLOWED_MANUAL_ACTIONS[number])) {
+      return createErrorResponse('Invalid manual action', 400);
     }
 
     await connectToDatabase();
-    // Manually force an omission update for testing
-    const mdpResult = await updateHabitState(authUser.userId, 'omission');
+    const mdpResult = await updateHabitState(authUser!.userId, 'omission');
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       message: 'Manual omission applied successfully',
-      mdp: mdpResult
+      mdp: mdpResult,
     });
   } catch (error: unknown) {
     console.error('History API POST Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createErrorResponse(getErrorMessage(error));
   }
 }

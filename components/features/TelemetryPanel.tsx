@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Terminal, Cpu, Zap, Activity } from 'lucide-react';
 import type { TelemetryData } from '@/types';
 import { CO2_PER_API_CALL_KG } from '@/constants';

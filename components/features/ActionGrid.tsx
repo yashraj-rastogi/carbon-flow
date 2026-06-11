@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Flame, Droplet, Sparkles, Globe, Activity, Plus, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { LucideProps } from 'lucide-react';
@@ -41,11 +41,7 @@ export default function ActionGrid({
   const [loading, setLoading] = useState(true);
   const [loggingId, setLoggingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchActions();
-  }, []);
-
-  const fetchActions = async () => {
+  const fetchActions = useCallback(async () => {
     try {
       const res = await fetch('/api/actions');
       const data = await res.json();
@@ -57,9 +53,14 @@ export default function ActionGrid({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleLogAction = async (action: ActionItem) => {
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchActions();
+  }, [fetchActions]);
+
+  const handleLogAction = useCallback(async (action: ActionItem) => {
     if (!token || loggingId) return;
     setLoggingId(action._id);
     statusMessageSetter(`Logging micro-habit: ${action.name}...`);
@@ -92,7 +93,7 @@ export default function ActionGrid({
     } finally {
       setLoggingId(null);
     }
-  };
+  }, [token, loggingId, statusMessageSetter, onActionLogged]);
 
   /** Calculate MDP reward preview for a given action impact. */
   const getRewardPreview = (impactKg: number): number => {

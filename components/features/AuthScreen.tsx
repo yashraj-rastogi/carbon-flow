@@ -3,7 +3,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Globe } from 'lucide-react';
-import type { UserProfile } from '@/types';
 
 interface AuthScreenProps {
   usernameInput: string;

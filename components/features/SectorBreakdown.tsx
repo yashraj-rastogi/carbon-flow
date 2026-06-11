@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Sparkles, Flame, Droplet, Mic } from 'lucide-react';
 import type { CategoryEmissions } from '@/types';
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @jest-environment node
  */
@@ -61,6 +62,32 @@ describe('Auth API Endpoint (/api/auth)', () => {
     expect(json.error).toContain('Username must be 50 characters or fewer');
   });
 
+  it('returns 400 if username contains invalid characters', async () => {
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'user@hack!' }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+
+    const json = await response.json();
+    expect(json.error).toContain('letters, numbers, underscores, and hyphens');
+  });
+
+  it('returns 400 if username contains spaces', async () => {
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'user name' }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+
+    const json = await response.json();
+    expect(json.error).toContain('letters, numbers, underscores, and hyphens');
+  });
+
   it('registers a new user successfully if user does not exist', async () => {
     (User.findOne as jest.Mock).mockResolvedValue(null);
 
@@ -97,7 +124,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
     expect(json.error).toBe('User already exists');
   });
 
-  it('logs in/auto-creates an existing user', async () => {
+  it('logs in an existing user', async () => {
     const mockDbUser = {
       _id: { toString: () => 'existing_id' },
       username: 'existinguser',
@@ -118,8 +145,26 @@ describe('Auth API Endpoint (/api/auth)', () => {
     expect(json.user.id).toBe('existing_id');
   });
 
+  it('auto-creates user on login if they do not exist', async () => {
+    (User.findOne as jest.Mock).mockResolvedValue(null);
+
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'brandnewuser' }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    const json = await response.json();
+    expect(json.token).toBeTruthy();
+    expect(json.user.username).toBe('brandnewuser');
+    expect(User).toHaveBeenCalled();
+    expect(HabitState).toHaveBeenCalled();
+  });
+
   it('returns 500 on database error', async () => {
-    (connectToDatabase as jest.Mock).mockRejectedValue(new Error('DB connection failed'));
+    (connectToDatabase as jest.Mock).mockRejectedValueOnce(new Error('DB connection failed'));
 
     const request = new Request('http://localhost/api/auth', {
       method: 'POST',
@@ -132,4 +177,21 @@ describe('Auth API Endpoint (/api/auth)', () => {
     const json = await response.json();
     expect(json.error).toBe('DB connection failed');
   });
+
+  it('accepts usernames with hyphens and underscores', async () => {
+    (connectToDatabase as jest.Mock).mockResolvedValue(true);
+    (User.findOne as jest.Mock).mockResolvedValue(null);
+
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'my-user_name123', action: 'register' }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.success).toBe(true);
+    expect(json.user.username).toBe('my-user_name123');
+  });
 });
+

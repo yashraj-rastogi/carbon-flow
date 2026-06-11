@@ -1,77 +1,137 @@
-import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { connectToDatabase } from '@/lib/db';
 import { CarbonLog } from '@/lib/models';
-import { getAuthUser } from '@/lib/auth';
+import { updateHabitState } from '@/lib/mdp';
 import { preprocessImage } from '@/lib/preprocess';
 import { calculateEmissions } from '@/lib/egrid';
-import { updateHabitState } from '@/lib/mdp';
-import { CONFIDENCE_THRESHOLD, GEMINI_MODEL_FLASH, GEMINI_MODEL_PRO, MAX_FILE_SIZE_BYTES } from '@/constants';
+import { extractWithCascade } from '@/lib/gemini';
+import { MAX_FILE_SIZE_BYTES } from '@/constants';
+import { BILL_SCHEMA, VOICE_SCHEMA, BILL_EXTRACTION_PROMPT, VOICE_EXTRACTION_PROMPT } from '@/constants/schemas';
+import {
+  authenticateRequest,
+  createSuccessResponse,
+  createErrorResponse,
+  getErrorMessage,
+} from '@/lib/api-utils';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+/**
+ * Returns true if the file is an audio recording based on MIME type or extension.
+ */
+function isAudioFile(mimeType: string, fileName: string): boolean {
+  return (
+    mimeType.startsWith('audio/') ||
+    fileName.endsWith('.wav') ||
+    fileName.endsWith('.mp3') ||
+    fileName.endsWith('.m4a')
+  );
+}
 
-// JSON schema for Utility Bills
-const BILL_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    utilityCompany: { type: 'STRING' },
-    billingPeriod: { type: 'STRING', description: 'The dates of service, e.g. Oct 1 - Oct 31, 2024' },
-    amountDue: { type: 'NUMBER', description: 'Total charges for the period' },
-    consumption: { type: 'NUMBER', description: 'The numeric usage amount (e.g. 350)' },
-    units: { type: 'STRING', description: 'kWh, therms, CCF, gallons, etc.' },
-    zipCode: { type: 'STRING' },
-    state: { type: 'STRING', description: 'Two-letter US state code, e.g. CA, NY, TX' },
-    billType: { type: 'STRING', description: 'Must be one of: electricity, gas, water, receipt' },
-    confidenceScore: { type: 'NUMBER', description: 'Confidence in extraction from 0.0 (no confidence) to 1.0 (certain)' },
-    explanation: { type: 'STRING', description: 'Brief explanation of key figures found' }
-  },
-  required: ['utilityCompany', 'consumption', 'units', 'billType', 'confidenceScore']
-};
+/**
+ * Saves a voice log entry to the database and triggers an MDP transition.
+ */
+async function processVoiceLog(
+  userId: string,
+  fileName: string,
+  extractedData: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const co2EmissionsKg = (extractedData.carbonDeltaKg as number) || 0;
 
-// JSON schema for Carbon Voice Logs
-const VOICE_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    transcript: { type: 'STRING', description: 'Full transcription of the voice memo' },
-    actionType: { type: 'STRING', description: 'One of: electricity, gas, water, transport, food, waste, or conservation' },
-    quantity: { type: 'NUMBER', description: 'Numerical amount associated with the action (e.g. 15)' },
-    units: { type: 'STRING', description: 'Units (e.g. miles, hours, kWh, gallons)' },
-    carbonDeltaKg: { type: 'NUMBER', description: 'Estimated carbon offset/emissions generated in kg. Positive for emissions, negative for savings/conservation.' },
-    confidenceScore: { type: 'NUMBER', description: 'Confidence in interpretation from 0.0 to 1.0' },
-    explanation: { type: 'STRING', description: 'Analysis of what the user logged' }
-  },
-  required: ['transcript', 'actionType', 'carbonDeltaKg', 'confidenceScore']
-};
+  const log = new CarbonLog({
+    userId,
+    type: 'voice_log',
+    fileName,
+    rawText: (extractedData.transcript as string) || '',
+    billDetails: {
+      utilityCompany: 'Voice Log Integration',
+      billingPeriod: new Date().toLocaleDateString(),
+      consumption: (extractedData.quantity as number) || 0,
+      units: (extractedData.units as string) || 'units',
+      state: 'US',
+    },
+    co2EmissionsKg,
+  });
+  await log.save();
 
-export async function POST(request: Request) {
+  const mdpResult = await updateHabitState(userId, 'log', co2EmissionsKg);
+
+  return { dataType: 'voice_log', data: extractedData, co2EmissionsKg, mdp: mdpResult };
+}
+
+/**
+ * Saves a utility bill entry to the database and triggers an MDP transition.
+ */
+async function processBillEntry(
+  userId: string,
+  fileName: string,
+  extractedData: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const calcResult = calculateEmissions(
+    (extractedData.billType as string) || 'electricity',
+    (extractedData.consumption as number) || 0,
+    extractedData.state as string | undefined
+  );
+
+  const log = new CarbonLog({
+    userId,
+    type: (extractedData.billType as string) || 'electricity',
+    fileName,
+    rawText: (extractedData.explanation as string) || '',
+    billDetails: {
+      utilityCompany: extractedData.utilityCompany as string,
+      billingPeriod: extractedData.billingPeriod as string,
+      amountDue: extractedData.amountDue as number,
+      consumption: extractedData.consumption as number,
+      units: extractedData.units as string,
+      zipCode: extractedData.zipCode as string,
+      state: extractedData.state as string,
+    },
+    co2EmissionsKg: calcResult.co2EmissionsKg,
+    eGRIDSubregion: calcResult.subregion,
+    eGRIDFactor: calcResult.factor,
+  });
+  await log.save();
+
+  const mdpResult = await updateHabitState(userId, 'log', calcResult.co2EmissionsKg);
+
+  return {
+    dataType: 'bill',
+    data: extractedData,
+    co2EmissionsKg: calcResult.co2EmissionsKg,
+    eGRIDSubregion: calcResult.subregion,
+    mdp: mdpResult,
+  };
+}
+
+/**
+ * POST /api/extract
+ *
+ * Accepts a file upload (image, PDF, or audio) and extracts carbon data
+ * using Gemini's multimodal AI with a confidence-gated Flash → Pro cascade.
+ */
+export async function POST(request: Request): Promise<Response> {
   try {
-    // 1. Authenticate user
-    const authUser = getAuthUser(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized. Valid token required.' }, { status: 401 });
-    }
+    // 1. Authenticate
+    const [authUser, authError] = authenticateRequest(request);
+    if (authError) return authError;
 
-    // 2. Parse form data
+    // 2. Parse and validate file
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+      return createErrorResponse('No file uploaded', 400);
     }
-
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json({ error: 'File size exceeds maximum limit of 8MB' }, { status: 400 });
+      return createErrorResponse('File size exceeds maximum limit of 8MB', 400);
     }
 
     const arrayBuffer = await file.arrayBuffer();
     let fileBuffer: Buffer = Buffer.from(arrayBuffer);
     let mimeType = file.type;
-    let isAudio = mimeType.startsWith('audio/') || file.name.endsWith('.wav') || file.name.endsWith('.mp3') || file.name.endsWith('.m4a');
-    let isPDF = mimeType === 'application/pdf' || file.name.endsWith('.pdf');
+    const isAudio = isAudioFile(mimeType, file.name);
 
     console.log(`Processing file: ${file.name}, type: ${mimeType}, size: ${fileBuffer.length} bytes`);
 
-    // 3. Preprocess if it is an image
+    // 3. Preprocess images for optimal OCR
     if (mimeType.startsWith('image/')) {
       try {
         const preprocessed = await preprocessImage(fileBuffer);
@@ -82,201 +142,33 @@ export async function POST(request: Request) {
       }
     }
 
-    // Convert to base64 for Gemini payload
+    // 4. Extract via Gemini cascade
     const base64Data = fileBuffer.toString('base64');
-    let modelName = GEMINI_MODEL_FLASH;
-    let extractedJson: Record<string, unknown> | null = null;
-    let modelUsed = GEMINI_MODEL_FLASH;
-    let tokenUsage = { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 };
-
     await connectToDatabase();
 
-    if (isAudio) {
-      // Process voice log
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: [
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: mimeType || 'audio/wav'
-            }
-          },
-          'Transcribe this audio, identify the sustainability or energy-related action, estimate any carbon impacts, and extract structured fields.'
-        ],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: VOICE_SCHEMA,
-          temperature: 0.1
-        }
-      });
+    const schema = isAudio ? VOICE_SCHEMA : BILL_SCHEMA;
+    const prompt = isAudio ? VOICE_EXTRACTION_PROMPT : BILL_EXTRACTION_PROMPT;
+    const fallbackMime = isAudio ? 'audio/wav' : 'application/pdf';
 
-      extractedJson = JSON.parse(response.text || '{}');
-      console.log('Gemini Audio Response:', extractedJson);
-      modelUsed = modelName;
-      tokenUsage = {
-        promptTokens: response.usageMetadata?.promptTokenCount || 0,
-        candidatesTokens: response.usageMetadata?.candidatesTokenCount || 0,
-        totalTokens: response.usageMetadata?.totalTokenCount || 0
-      };
+    const extraction = await extractWithCascade(
+      base64Data,
+      mimeType || fallbackMime,
+      prompt,
+      schema as unknown as Record<string, unknown>
+    );
 
-      // Cascade logic for low confidence in voice
-      if (extractedJson && (extractedJson.confidenceScore as number) < CONFIDENCE_THRESHOLD) {
-        console.log('Low confidence on audio. Cascading to Gemini 2.5 Pro...');
-        const proResponse = await ai.models.generateContent({
-          model: GEMINI_MODEL_PRO,
-          contents: [
-            { inlineData: { data: base64Data, mimeType: mimeType || 'audio/wav' } },
-            'Transcribe this audio, identify the sustainability or energy-related action, estimate any carbon impacts, and extract structured fields.'
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: VOICE_SCHEMA,
-            temperature: 0.1
-          }
-        });
-        extractedJson = JSON.parse(proResponse.text || '{}');
-        modelUsed = GEMINI_MODEL_PRO;
-        tokenUsage = {
-          promptTokens: proResponse.usageMetadata?.promptTokenCount || 0,
-          candidatesTokens: proResponse.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: proResponse.usageMetadata?.totalTokenCount || 0
-        };
-      }
+    // 5. Save to database and trigger MDP
+    const result = isAudio
+      ? await processVoiceLog(authUser!.userId, file.name, extraction.data)
+      : await processBillEntry(authUser!.userId, file.name, extraction.data);
 
-      // Calculate carbon impact for voice log
-      const co2EmissionsKg = (extractedJson?.carbonDeltaKg as number) || 0;
-
-      // Save voice log to database
-      const log = new CarbonLog({
-        userId: authUser.userId,
-        type: 'voice_log',
-        fileName: file.name,
-        rawText: (extractedJson?.transcript as string) || '',
-        billDetails: {
-          utilityCompany: 'Voice Log Integration',
-          billingPeriod: new Date().toLocaleDateString(),
-          consumption: (extractedJson?.quantity as number) || 0,
-          units: (extractedJson?.units as string) || 'units',
-          state: 'US'
-        },
-        co2EmissionsKg,
-      });
-      await log.save();
-
-      // Trigger MDP state machine
-      // If emissions is negative (savings), we treat it as an active positive logging.
-      const mdpResult = await updateHabitState(authUser.userId, 'log', co2EmissionsKg);
-
-      return NextResponse.json({
-        success: true,
-        dataType: 'voice_log',
-        data: extractedJson,
-        co2EmissionsKg,
-        mdp: mdpResult,
-        modelUsed,
-        tokenUsage
-      });
-
-    } else {
-      // Process utility bill (image/PDF)
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: [
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: mimeType || 'application/pdf'
-            }
-          },
-          'Analyze this utility bill/receipt, find the consumption figures, units (kWh/therms/gallons/etc.), billing period, state, zip code, and utility name.'
-        ],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: BILL_SCHEMA,
-          temperature: 0.1
-        }
-      });
-
-      extractedJson = JSON.parse(response.text || '{}');
-      console.log('Gemini Bill Response:', extractedJson);
-      modelUsed = modelName;
-      tokenUsage = {
-        promptTokens: response.usageMetadata?.promptTokenCount || 0,
-        candidatesTokens: response.usageMetadata?.candidatesTokenCount || 0,
-        totalTokens: response.usageMetadata?.totalTokenCount || 0
-      };
-
-      // Cascade logic: check if confidence score is low
-      if (extractedJson && (extractedJson.confidenceScore as number) < CONFIDENCE_THRESHOLD) {
-        console.log('Low confidence on bill extraction. Cascading to Gemini 2.5 Pro...');
-        const proResponse = await ai.models.generateContent({
-          model: GEMINI_MODEL_PRO,
-          contents: [
-            { inlineData: { data: base64Data, mimeType: mimeType || 'application/pdf' } },
-            'Analyze this utility bill/receipt, find the consumption figures, units (kWh/therms/gallons/etc.), billing period, state, zip code, and utility name.'
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: BILL_SCHEMA,
-            temperature: 0.1
-          }
-        });
-        extractedJson = JSON.parse(proResponse.text || '{}');
-        modelUsed = GEMINI_MODEL_PRO;
-        tokenUsage = {
-          promptTokens: proResponse.usageMetadata?.promptTokenCount || 0,
-          candidatesTokens: proResponse.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: proResponse.usageMetadata?.totalTokenCount || 0
-        };
-      }
-
-      // Calculate localized emissions
-      const calcResult = calculateEmissions(
-        (extractedJson?.billType as string) || 'electricity',
-        (extractedJson?.consumption as number) || 0,
-        extractedJson?.state as string | undefined
-      );
-
-      // Save log to database
-      const log = new CarbonLog({
-        userId: authUser.userId,
-        type: (extractedJson?.billType as string) || 'electricity',
-        fileName: file.name,
-        rawText: (extractedJson?.explanation as string) || '',
-        billDetails: {
-          utilityCompany: extractedJson?.utilityCompany as string,
-          billingPeriod: extractedJson?.billingPeriod as string,
-          amountDue: extractedJson?.amountDue as number,
-          consumption: extractedJson?.consumption as number,
-          units: extractedJson?.units as string,
-          zipCode: extractedJson?.zipCode as string,
-          state: extractedJson?.state as string,
-        },
-        co2EmissionsKg: calcResult.co2EmissionsKg,
-        eGRIDSubregion: calcResult.subregion,
-        eGRIDFactor: calcResult.factor,
-      });
-      await log.save();
-
-      // Trigger MDP state machine
-      const mdpResult = await updateHabitState(authUser.userId, 'log', calcResult.co2EmissionsKg);
-
-      return NextResponse.json({
-        success: true,
-        dataType: 'bill',
-        data: extractedJson,
-        co2EmissionsKg: calcResult.co2EmissionsKg,
-        eGRIDSubregion: calcResult.subregion,
-        mdp: mdpResult,
-        modelUsed,
-        tokenUsage
-      });
-    }
-
+    return createSuccessResponse({
+      ...result,
+      modelUsed: extraction.modelUsed,
+      tokenUsage: extraction.tokenUsage,
+    });
   } catch (error: unknown) {
     console.error('Extract API Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createErrorResponse(getErrorMessage(error));
   }
 }

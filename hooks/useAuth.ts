@@ -37,14 +37,20 @@ export function useAuth(): UseAuthReturn {
     const savedUser = localStorage.getItem(STORAGE_KEY_USER);
     if (savedToken && savedUser) {
       try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser) as UserProfile);
+        const parsedUser = JSON.parse(savedUser) as UserProfile;
+        Promise.resolve().then(() => {
+          setToken(savedToken);
+          setUser(parsedUser);
+          setLoading(false);
+        });
+        return;
       } catch {
         // Corrupted storage — clear and reset
         localStorage.removeItem(STORAGE_KEY_TOKEN);
         localStorage.removeItem(STORAGE_KEY_USER);
       }
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(false);
   }, []);
 

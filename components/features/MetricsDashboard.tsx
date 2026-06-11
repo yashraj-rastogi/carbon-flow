@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import Odometer from '@/components/ui/Odometer';
 import type { DashboardMetrics } from '@/types';
 

@@ -5,7 +5,6 @@ import { GET, POST } from '@/app/api/history/route';
 import { CarbonLog, HabitState } from '@/lib/models';
 import { getAuthUser } from '@/lib/auth';
 import { processOmissionsIfOverdue, updateHabitState } from '@/lib/mdp';
-import { connectToDatabase } from '@/lib/db';
 
 jest.mock('@/lib/db', () => ({
   connectToDatabase: jest.fn().mockResolvedValue(true),
@@ -49,7 +48,7 @@ describe('History API Endpoint (/api/history)', () => {
       expect(response.status).toBe(401);
 
       const json = await response.json();
-      expect(json.error).toBe('Unauthorized');
+      expect(json.error).toBe('Unauthorized. Valid token required.');
     });
 
     it('returns history logs, habitState, and metrics successfully', async () => {

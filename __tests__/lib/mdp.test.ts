@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @jest-environment node
  */
@@ -6,9 +7,6 @@ import { HabitState } from '@/lib/models';
 import {
   MDP_MAX_STRENGTH,
   MDP_OMISSION_PENALTY,
-  MDP_BASE_REWARD,
-  MDP_HABIT_BONUS_MULTIPLIER,
-  MDP_CARBON_PENALTY_RATE,
   MDP_CARBON_BASELINE_KG,
   MDP_LOG_SUCCESS_PROB,
   MDP_OMISSION_MAJOR_PROB,

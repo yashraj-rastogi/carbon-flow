@@ -1,11 +1,15 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 interface HabitOasisProps {
   /** Current habit strength (5–10 for Oasis state). */
   strength: number;
+}
+
+function getPseudoRandom(index: number, seed: number): number {
+  const x = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453;
+  return x - Math.floor(x);
 }
 
 /**
@@ -17,7 +21,8 @@ interface HabitOasisProps {
  * component exposes its meaning via role="img" and aria-label.
  */
 export default function HabitOasis({ strength }: HabitOasisProps) {
-  const particleCount = strength * 3;
+  const shouldReduceMotion = useReducedMotion();
+  const particleCount = shouldReduceMotion ? 0 : strength * 3;
   const coreScale = 0.8 + (strength / 10) * 0.4;
   const glowIntensity = strength * 2.5;
 
@@ -36,7 +41,7 @@ export default function HabitOasis({ strength }: HabitOasisProps) {
         style={{
           background: 'radial-gradient(circle, var(--oasis-neon) 0%, var(--oasis-neon-secondary) 100%)',
           transform: `scale(${coreScale * 1.2})`,
-          boxShadow: `0 0 ${glowIntensity}px rgba(16, 185, 129, 0.4)`,
+          boxShadow: `0 0 ${glowIntensity}px rgba(16,185,129,0.4)`,
         }}
         aria-hidden="true"
       />
@@ -44,40 +49,35 @@ export default function HabitOasis({ strength }: HabitOasisProps) {
       {/* Floating Oasis Core */}
       <motion.div
         className="relative z-10 flex flex-col items-center justify-center cursor-pointer select-none"
-        animate={{ y: [-12, 12, -12], rotate: [0, 3, -3, 0] }}
+        animate={{ y: shouldReduceMotion ? 0 : [-12, 12, -12], rotate: shouldReduceMotion ? 0 : [0, 3, -3, 0] }}
         transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
         style={{ transform: `scale(${coreScale})` }}
         aria-hidden="true"
       >
-        {/* Orbital Ring 1 */}
-        <motion.div
-          className="absolute w-64 h-64 border-2 border-emerald-400/30 rounded-full"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
-        />
-
-        {/* Orbital Ring 2 (Counter-rotated) */}
-        <motion.div
-          className="absolute w-56 h-56 border border-cyan-400/20 rounded-full"
-          style={{ transform: 'rotateX(60deg)' }}
-          animate={{ rotate: -360 }}
-          transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
-        />
-
-        {/* Central Core Globe */}
         <div
-          className="relative w-44 h-44 rounded-full flex flex-col items-center justify-center text-center glass-panel border-emerald-400/40 shadow-[0_0_40px_rgba(16,185,129,0.3)]"
+          className="w-32 h-32 rounded-full relative flex items-center justify-center transition-all duration-500"
           style={{
-            background: 'radial-gradient(circle at 30% 30%, rgba(4, 47, 31, 0.8) 0%, rgba(2, 18, 12, 0.95) 100%)',
+            background: 'radial-gradient(circle, var(--oasis-neon) 0%, rgba(16, 185, 129, 0.6) 70%, transparent 100%)',
+            boxShadow: '0 0 40px var(--oasis-neon), inset 0 0 20px rgba(255, 255, 255, 0.2)',
           }}
         >
-          {/* Inner pulsating node */}
+          {/* Orbital Ring 1 */}
           <motion.div
-            className="absolute w-36 h-36 rounded-full bg-emerald-500/10 border border-emerald-400/30 filter blur-xs"
-            animate={{ scale: [0.9, 1.05, 0.9] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute inset-[-10px] rounded-full border border-emerald-400/40"
+            style={{ borderStyle: 'dashed' }}
+            animate={{ rotate: shouldReduceMotion ? 0 : 360 }}
+            transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
           />
 
+          {/* Orbital Ring 2 */}
+          <motion.div
+            className="absolute inset-[-20px] rounded-full border border-cyan-400/30"
+            style={{ borderStyle: 'dotted' }}
+            animate={{ rotate: shouldReduceMotion ? 0 : -360 }}
+            transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+          />
+
+          {/* Stats Display Panel inside Orb */}
           <span className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">
             Oasis Core
           </span>
@@ -92,11 +92,14 @@ export default function HabitOasis({ strength }: HabitOasisProps) {
 
       {/* Bioluminescent Floating Particles */}
       {Array.from({ length: particleCount }).map((_, i) => {
-        const size = Math.random() * 6 + 4;
-        const initialX = Math.random() * 400 - 200;
-        const initialY = Math.random() * 200 + 100;
-        const duration = Math.random() * 6 + 4;
-        const delay = Math.random() * 3;
+        const size = getPseudoRandom(i, 1) * 6 + 4;
+        const initialX = getPseudoRandom(i, 2) * 400 - 200;
+        const initialY = getPseudoRandom(i, 3) * 200 + 100;
+        const duration = getPseudoRandom(i, 4) * 6 + 4;
+        const delay = getPseudoRandom(i, 5) * 3;
+        const colorCheck = getPseudoRandom(i, 6);
+        const background = colorCheck > 0.5 ? 'var(--oasis-neon)' : 'var(--oasis-neon-secondary)';
+        const xOffset = getPseudoRandom(i, 7) * 60 - 30;
 
         return (
           <motion.div
@@ -105,7 +108,7 @@ export default function HabitOasis({ strength }: HabitOasisProps) {
             style={{
               width: size,
               height: size,
-              background: Math.random() > 0.5 ? 'var(--oasis-neon)' : 'var(--oasis-neon-secondary)',
+              background,
               filter: 'blur(1px)',
               boxShadow: '0 0 8px currentColor',
               x: initialX,
@@ -113,7 +116,7 @@ export default function HabitOasis({ strength }: HabitOasisProps) {
             }}
             animate={{
               y: -350,
-              x: [initialX, initialX + (Math.random() * 60 - 30), initialX],
+              x: [initialX, initialX + xOffset, initialX],
               opacity: [0, 0.8, 0.8, 0],
             }}
             transition={{ duration, repeat: Infinity, delay, ease: 'easeInOut' }}

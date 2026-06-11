@@ -13,7 +13,7 @@ const mockJpeg = jest.fn();
 const mockToBuffer = jest.fn();
 
 jest.mock('sharp', () => {
-  const sharpMock = (buffer: Buffer) => {
+  const sharpMock = (_buffer: Buffer) => {
     const instance = {
       metadata: mockMetadata,
       resize: mockResize,
