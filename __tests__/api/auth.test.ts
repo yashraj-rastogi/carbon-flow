@@ -46,7 +46,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
     expect(response.status).toBe(400);
 
     const json = await response.json();
-    expect(json.error).toBe('Username is required');
+    expect(json.error).toBe('username is required');
   });
 
   it('returns 400 if username is too long', async () => {
@@ -59,7 +59,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
     expect(response.status).toBe(400);
 
     const json = await response.json();
-    expect(json.error).toContain('Username must be 50 characters or fewer');
+    expect(json.error).toContain('username must be at most 50 characters');
   });
 
   it('returns 400 if username contains invalid characters', async () => {
@@ -72,7 +72,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
     expect(response.status).toBe(400);
 
     const json = await response.json();
-    expect(json.error).toContain('letters, numbers, underscores, and hyphens');
+    expect(json.error).toContain('Username may only contain letters, numbers, underscores, and hyphens');
   });
 
   it('returns 400 if username contains spaces', async () => {
@@ -85,7 +85,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
     expect(response.status).toBe(400);
 
     const json = await response.json();
-    expect(json.error).toContain('letters, numbers, underscores, and hyphens');
+    expect(json.error).toContain('Username may only contain letters, numbers, underscores, and hyphens');
   });
 
   it('registers a new user successfully if user does not exist', async () => {
@@ -134,7 +134,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
 
     const request = new Request('http://localhost/api/auth', {
       method: 'POST',
-      body: JSON.stringify({ username: 'existinguser' }),
+      body: JSON.stringify({ username: 'existinguser', action: 'login' }),
     });
 
     const response = await POST(request);
@@ -150,7 +150,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
 
     const request = new Request('http://localhost/api/auth', {
       method: 'POST',
-      body: JSON.stringify({ username: 'brandnewuser' }),
+      body: JSON.stringify({ username: 'brandnewuser', action: 'login' }),
     });
 
     const response = await POST(request);
@@ -168,7 +168,7 @@ describe('Auth API Endpoint (/api/auth)', () => {
 
     const request = new Request('http://localhost/api/auth', {
       method: 'POST',
-      body: JSON.stringify({ username: 'user' }),
+      body: JSON.stringify({ username: 'user', action: 'login' }),
     });
 
     const response = await POST(request);

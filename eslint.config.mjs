@@ -7,9 +7,11 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/explicit-function-return-type': ['error', { allowExpressions: true }],
       'prefer-const': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
   globalIgnores([

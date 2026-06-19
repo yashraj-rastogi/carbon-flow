@@ -87,7 +87,7 @@ describe('Actions API Endpoint (/api/actions)', () => {
       const response = await POST(request);
       expect(response.status).toBe(400);
       const json = await response.json();
-      expect(json.error).toBe('Action ID is required');
+      expect(json.error).toBe('actionId is required');
     });
 
     it('returns 404 if action not found', async () => {

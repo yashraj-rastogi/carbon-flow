@@ -34,10 +34,10 @@ Carbon-Flow solves all three.
 Carbon-Flow is a **serverless sustainability platform** that:
 
 1. **Eliminates manual data entry** — Upload a photo of your utility bill, or record a voice note. Gemini's multimodal AI extracts everything.
-2. **Delivers hyper-local insights** — Applies EPA eGRID 2024 emission intensity factors, specific to your US state, instead of global averages.
-3. **Creates behavioral retention** — A **Markov Decision Process (MDP)** engine drives a living Habit Strength score (`S ∈ [0, 10]`) that visually transforms the entire UI — rewarding consistency, punishing neglect.
-
-The dashboard itself is the feedback loop. It is not a chart. It is a **living entity** that changes its visual identity based on your behavior.
+2. **AI Personalized Insights**: Analyzes recent logging behavior using Gemini to generate targeted, personalized recommendations for carbon footprint reduction.
+4. **Hyper-Localized Emissions**: Implements the **EPA eGRID 2024 database** to dynamically calculate emissions based on the user's specific state/subregion power mix.
+5. **Markov Decision Process (MDP) Gamification**: Uses a mathematical MDP model with a Bellman-formulated reward function to transition users between UI states ("Industrial Waste" vs. "Habit Oasis") based on consistency.
+6. **Frictionless Action Library**: Curated micro-habits (e.g., "Cold Laundry Cycle", "Walk or Bike") logged with a single tap.
 
 ---
 
@@ -67,10 +67,13 @@ Carbon-Flow is a **Serverless Next.js Monolith** — a single deployable applica
           │ (fetch + localStorage session token)
           ▼
 ┌─────────────────────────────────────────────────────┐
-│         Next.js 16 App Router — Route Handlers      │
-│  POST /api/auth      — Mock JWT auth                │
-│  POST /api/extract   — AI multimodal ingestion      │
-│  GET  /api/history   — MDP decay + log retrieval    │
+│         Next.js 16 App Router — Route Handlers    │      ├─ POST /api/extract    # Gemini ingestion
+    │      ├─ POST /api/actions    # Quick actions
+    │      ├─ GET  /api/history    # MDP + Log history
+    │      └─ GET  /api/insights   # AI Personalized Insights
+    │
+    ▼
+[ Core Engine (lib) ]   │
 │  GET  /api/actions   — Micro-habit library          │
 │  POST /api/actions   — One-tap habit logging        │
 └─────────────────────────────────────────────────────┘
@@ -311,47 +314,11 @@ git push origin main
 
 ---
 
-## 📁 Project Structure
 
-```
-carbon-flow/
-├── app/
-│   ├── api/
-│   │   ├── actions/route.ts    # Micro-habit library + one-tap logging
-│   │   ├── auth/route.ts       # Mock JWT authentication
-│   │   ├── extract/route.ts    # Gemini AI ingestion pipeline
-│   │   └── history/route.ts    # MDP updates + log retrieval
-│   ├── components/
-│   │   ├── ActionGrid.tsx      # Micro-habit card grid with reward previews
-│   │   ├── HabitOasis.tsx      # Oasis theme visual (S ≥ 5)
-│   │   ├── IndustrialWaste.tsx # Industrial theme visual (S < 5)
-│   │   ├── TelemetryPanel.tsx  # System diagnostics terminal widget
-│   │   └── UploadModal.tsx     # Drag-drop + voice recording modal
-│   ├── globals.css             # Full design system + theme tokens
-│   ├── layout.tsx              # Root layout with Outfit font + SEO
-│   └── page.tsx                # Main dashboard + auth screens
-├── lib/
-│   ├── auth.ts                 # Mock Base64 JWT token helpers
-│   ├── db.ts                   # Cached Mongoose singleton
-│   ├── egrid.ts                # EPA eGRID 2024 emission factors
-│   ├── mdp.ts                  # MDP engine + reward functions
-│   ├── models.ts               # Mongoose schemas (User, HabitState, CarbonLog, Action)
-│   └── preprocess.ts           # sharp image pipeline
-├── references/
-│   ├── prd.md                  # Product Requirements Document
-│   ├── architecture.md         # System Architecture
-│   ├── mvp-screens.md          # Screen-by-screen build status
-│   ├── user-flow.md            # User flow diagrams
-│   └── roadmap.md              # Development roadmap
-└── public/
-    └── mock_utility_bill.png   # Sample bill for testing
-```
-
----
 
 ## 🧪 Testing
 
-Carbon-Flow has a comprehensive Jest test suite with 11 suites and 104+ tests:
+Carbon-Flow has a comprehensive Jest test suite with 13 suites and 128+ tests:
 
 ```bash
 # Run all tests
@@ -371,10 +338,10 @@ npm run lint
 
 | Metric | Coverage | Threshold |
 |---|---|---|
-| Statements | **90%+** | 80% |
-| Branches | **71%+** | 70% |
-| Lines | **91%+** | 80% |
-| Functions | **90%+** | 80% |
+| Statements | **90%+** | 90% |
+| Branches | **80%+** | 80% |
+| Lines | **90%+** | 90% |
+| Functions | **90%+** | 90% |
 
 ### Test Structure
 
@@ -436,10 +403,11 @@ Carbon-Flow implements comprehensive accessibility features:
 | **1. Gateway (Auth)** | ✅ Built | Username login/register with mock JWT |
 | **2. Core Ecosystem (Dashboard)** | ✅ Built | Dynamic Oasis ↔ Industrial theme engine |
 | **3. Data Stream (Ingestion Hub)** | ✅ Built | Drag-drop bills + live voice recording |
-| **3b. Ingestion Registry** | ✅ Built | Full emissions history table |
-| **4. Action Grid** | ✅ Built | Curated micro-habits with MDP reward previews |
-| **5. Telemetry Panel** | ✅ Built | API latency, token economics, cascade ratio |
-| **OAuth Login** | ⏳ Attempt 3 | Google/GitHub via next-auth |
+| **Metrics Dashboard** | ChartJS `react-chartjs-2` | Donut charts for sector emissions, animated KPI counters |
+| **Action Grid** | CSS Grid + Framer | Curated micro-habits with one-tap logging and reward preview |
+| **AI Insights** | Framer Motion | Stagger-animated personalized AI recommendations based on user history |
+| **History Log** | Native CSS tables | Sortable log of all past actions, bills, and MDP state changes |
+| **Telemetry** | Fixed Overlay | Diagnostic HUD showing API latency, token usage, and selected AI model |
 | **Region Onboarding** | ⏳ Attempt 3 | Zip code prompt on signup |
 
 ---

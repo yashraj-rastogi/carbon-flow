@@ -4,14 +4,19 @@ import { updateHabitState } from '@/lib/mdp';
 import { preprocessImage } from '@/lib/preprocess';
 import { calculateEmissions } from '@/lib/egrid';
 import { extractWithCascade } from '@/lib/gemini';
-import { MAX_FILE_SIZE_BYTES } from '@/constants';
+import { MAX_FILE_SIZE_BYTES, ACCEPTED_FILE_TYPES, ACCEPTED_FILE_INPUT } from '@/constants';
 import { BILL_SCHEMA, VOICE_SCHEMA, BILL_EXTRACTION_PROMPT, VOICE_EXTRACTION_PROMPT } from '@/constants/schemas';
+import { NextResponse } from 'next/server';
 import {
   authenticateRequest,
   createSuccessResponse,
   createErrorResponse,
   getErrorMessage,
 } from '@/lib/api-utils';
+import type { VoiceExtractionData, BillExtractionData, GeminiSchema } from '@/types';
+import { RateLimiter } from '@/lib/rate-limit';
+
+const extractRateLimiter = new RateLimiter({ interval: 60000, limit: 10 });
 
 /**
  * Returns true if the file is an audio recording based on MIME type or extension.
@@ -31,20 +36,20 @@ function isAudioFile(mimeType: string, fileName: string): boolean {
 async function processVoiceLog(
   userId: string,
   fileName: string,
-  extractedData: Record<string, unknown>
+  extractedData: VoiceExtractionData
 ): Promise<Record<string, unknown>> {
-  const co2EmissionsKg = (extractedData.carbonDeltaKg as number) || 0;
+  const co2EmissionsKg = extractedData.carbonDeltaKg || 0;
 
   const log = new CarbonLog({
     userId,
     type: 'voice_log',
     fileName,
-    rawText: (extractedData.transcript as string) || '',
+    rawText: extractedData.transcript || '',
     billDetails: {
       utilityCompany: 'Voice Log Integration',
       billingPeriod: new Date().toLocaleDateString(),
-      consumption: (extractedData.quantity as number) || 0,
-      units: (extractedData.units as string) || 'units',
+      consumption: extractedData.quantity || 0,
+      units: extractedData.units || 'units',
       state: 'US',
     },
     co2EmissionsKg,
@@ -62,27 +67,27 @@ async function processVoiceLog(
 async function processBillEntry(
   userId: string,
   fileName: string,
-  extractedData: Record<string, unknown>
+  extractedData: BillExtractionData
 ): Promise<Record<string, unknown>> {
   const calcResult = calculateEmissions(
-    (extractedData.billType as string) || 'electricity',
-    (extractedData.consumption as number) || 0,
-    extractedData.state as string | undefined
+    extractedData.billType || 'electricity',
+    extractedData.consumption || 0,
+    extractedData.state
   );
 
   const log = new CarbonLog({
     userId,
-    type: (extractedData.billType as string) || 'electricity',
+    type: extractedData.billType || 'electricity',
     fileName,
-    rawText: (extractedData.explanation as string) || '',
+    rawText: extractedData.explanation || '',
     billDetails: {
-      utilityCompany: extractedData.utilityCompany as string,
-      billingPeriod: extractedData.billingPeriod as string,
-      amountDue: extractedData.amountDue as number,
-      consumption: extractedData.consumption as number,
-      units: extractedData.units as string,
-      zipCode: extractedData.zipCode as string,
-      state: extractedData.state as string,
+      utilityCompany: extractedData.utilityCompany,
+      billingPeriod: extractedData.billingPeriod,
+      amountDue: extractedData.amountDue,
+      consumption: extractedData.consumption,
+      units: extractedData.units,
+      zipCode: extractedData.zipCode,
+      state: extractedData.state,
     },
     co2EmissionsKg: calcResult.co2EmissionsKg,
     eGRIDSubregion: calcResult.subregion,
@@ -113,6 +118,15 @@ export async function POST(request: Request): Promise<Response> {
     const [authUser, authError] = authenticateRequest(request);
     if (authError) return authError;
 
+    // Rate Limit Check
+    const rateLimit = extractRateLimiter.limitCheck(authUser!.userId);
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { success: false, error: 'Too Many Requests' },
+        { status: 429, headers: { 'Retry-After': '60' } }
+      );
+    }
+
     // 2. Parse and validate file
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -129,7 +143,14 @@ export async function POST(request: Request): Promise<Response> {
     let mimeType = file.type;
     const isAudio = isAudioFile(mimeType, file.name);
 
-    console.log(`Processing file: ${file.name}, type: ${mimeType}, size: ${fileBuffer.length} bytes`);
+    // Validate MIME type against allowlist
+    const isAcceptedImageOrPdf = ACCEPTED_FILE_TYPES.includes(mimeType as any);
+    if (!isAudio && !isAcceptedImageOrPdf) {
+      return createErrorResponse(
+        `Unsupported file type. Accepted types: ${ACCEPTED_FILE_INPUT}, plus common audio formats.`,
+        400
+      );
+    }
 
     // 3. Preprocess images for optimal OCR
     if (mimeType.startsWith('image/')) {
@@ -154,7 +175,7 @@ export async function POST(request: Request): Promise<Response> {
       base64Data,
       mimeType || fallbackMime,
       prompt,
-      schema as unknown as Record<string, unknown>
+      schema as unknown as GeminiSchema
     );
 
     // 5. Save to database and trigger MDP

@@ -9,6 +9,7 @@ import {
   parseJsonBody,
   sanitizeString,
 } from '@/lib/api-utils';
+import { validateSchema } from '@/lib/validation';
 
 /** Regex pattern for valid usernames: alphanumeric, underscores, hyphens. */
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -53,35 +54,31 @@ export async function POST(request: Request): Promise<Response> {
     await connectToDatabase();
 
     const body = await parseJsonBody(request);
-    const { username: rawUsername, email, action } = body;
+    const validation = validateSchema<{ username: string; email?: string; action: 'login' | 'register' }>(body, {
+      username: {
+        type: 'string',
+        required: true,
+        minLength: 1,
+        maxLength: MAX_USERNAME_LENGTH,
+        pattern: USERNAME_PATTERN,
+      },
+      email: { type: 'string', required: false },
+      action: { type: 'enum', enumValues: ['login', 'register'], required: true },
+    });
 
-    // Validate username presence and type
-    if (!rawUsername || typeof rawUsername !== 'string') {
-      return createErrorResponse('Username is required', 400);
+    if (!validation.success) {
+      // For specific error messages expected by UI
+      if (validation.error?.includes('format is invalid')) {
+        return createErrorResponse('Username may only contain letters, numbers, underscores, and hyphens', 400);
+      }
+      return createErrorResponse(validation.error!, 400);
     }
 
-    // Sanitize and validate username
-    const username = sanitizeString(rawUsername as string);
-
-    if (username.length === 0) {
-      return createErrorResponse('Username cannot be empty', 400);
-    }
-
-    if (username.length > MAX_USERNAME_LENGTH) {
-      return createErrorResponse(
-        `Username must be ${MAX_USERNAME_LENGTH} characters or fewer`,
-        400
-      );
-    }
-
-    if (!USERNAME_PATTERN.test(username)) {
-      return createErrorResponse(
-        'Username may only contain letters, numbers, underscores, and hyphens',
-        400
-      );
-    }
+    const { username: rawUsername, email, action } = validation.data!;
+    const username = sanitizeString(rawUsername);
 
     const userEmail = (email as string) || `${username}@example.com`;
+    // @ts-ignore - mongoose type bug
     let user = await User.findOne({ username });
 
     if (action === 'register') {
@@ -111,6 +108,6 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (error: unknown) {
     console.error('Auth API Error:', error);
-    return createErrorResponse(getErrorMessage(error));
+    return createErrorResponse(getErrorMessage(error), 500);
   }
 }

@@ -9,6 +9,7 @@ import {
   getErrorMessage,
   parseJsonBody,
 } from '@/lib/api-utils';
+import { validateSchema } from '@/lib/validation';
 
 /**
  * GET /api/actions
@@ -20,13 +21,13 @@ export async function GET(): Promise<Response> {
   try {
     await connectToDatabase();
 
-    let actions = await Action.find({});
+    let actions = await Action.find();
 
     // Auto-seed if collection is empty
     if (actions.length === 0) {
-      console.log('Action database empty. Seeding curated actions...');
-      await Action.insertMany(SEED_ACTIONS);
-      actions = await Action.find({});
+      console.warn('Action database empty. Seeding curated actions...');
+      await Action.insertMany([...SEED_ACTIONS]);
+      actions = await Action.find();
     }
 
     return createSuccessResponse({ actions });
@@ -50,15 +51,20 @@ export async function POST(request: Request): Promise<Response> {
 
     // 2. Validate input
     const body = await parseJsonBody(request);
-    const { actionId } = body;
+    const validation = validateSchema<{ actionId: string }>(body, {
+      actionId: { type: 'string', required: true },
+    });
 
-    if (!actionId) {
-      return createErrorResponse('Action ID is required', 400);
+    if (!validation.success) {
+      return createErrorResponse(validation.error!, 400);
     }
+
+    const { actionId } = validation.data!;
 
     await connectToDatabase();
 
     // 3. Find the action
+    // @ts-ignore - mongoose type bug
     const action = await Action.findById(actionId);
     if (!action) {
       return createErrorResponse('Action not found', 404);

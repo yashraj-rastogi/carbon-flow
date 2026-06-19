@@ -23,6 +23,20 @@ import {
  * Transition probabilities:
  * - **log**: 90% → S+1, 10% → S (unchanged)
  * - **omission**: 80% → S-2, 20% → S-1
+ * 
+ * Bellman Equation Formulation:
+ * V(s) = R(s, a) + γ * Σ P(s'|s,a) * V(s')
+ *
+ * State Transitions (Habit Strength S):
+ * 
+ *     [Omission]                [Consistent Logging]
+ *     <--------                     -------->
+ * (S=0) --- (S=1) --- ... --- (S=5 Oasis) --- ... --- (S=10 Max)
+ *           |                     |
+ *      Industrial            Sustainability
+ *        Waste                  Oasis
+ *
+ * @module lib/mdp
  *
  * @param currentStrength - Current habit strength level.
  * @param action - The MDP action performed ('log' or 'omission').
@@ -91,6 +105,7 @@ export async function updateHabitState(
 ): Promise<MdpTransitionResult> {
   await connectToDatabase();
 
+  // @ts-ignore - mongoose type bug
   let habitState = await HabitState.findOne({ userId });
 
   if (!habitState) {
@@ -143,6 +158,7 @@ export async function processOmissionsIfOverdue(
   userId: string
 ): Promise<{ appliedOmissionsCount: number; currentStrength: number } | null> {
   await connectToDatabase();
+  // @ts-ignore - mongoose type bug
   const habitState = await HabitState.findOne({ userId });
   if (!habitState) return null;
 

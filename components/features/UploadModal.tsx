@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import { Upload, X, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ACCEPTED_FILE_INPUT } from '@/constants';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import FileDropZone from '@/components/features/upload/FileDropZone';
@@ -101,6 +101,8 @@ export default function UploadModal({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  const prefersReducedMotion = useReducedMotion();
+
   // Restore focus on close
   useEffect(() => {
     if (!isOpen && previouslyFocusedRef.current) {
@@ -132,9 +134,9 @@ export default function UploadModal({
       <motion.div
         ref={modalRef}
         className="w-full max-w-lg overflow-hidden rounded-2xl glass-panel border border-emerald-500/20 bg-zinc-950 p-6 relative"
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        initial={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.95, y: prefersReducedMotion ? 0 : 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        exit={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.95, y: prefersReducedMotion ? 0 : 20 }}
         style={{
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.05)',
         }}

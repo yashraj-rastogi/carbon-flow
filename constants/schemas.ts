@@ -87,3 +87,28 @@ export const BILL_EXTRACTION_PROMPT =
 /** Prompt sent to Gemini for voice memo transcription and analysis. */
 export const VOICE_EXTRACTION_PROMPT =
   'Transcribe this audio, identify the sustainability or energy-related action, estimate any carbon impacts, and extract structured fields.';
+
+/** JSON schema for structured personalized insights. */
+export const INSIGHTS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    insights: {
+      type: 'ARRAY',
+      description: 'List of 3 personalized insights',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING', description: 'Short, catchy title for the insight' },
+          description: { type: 'STRING', description: 'Actionable and personalized description based on past logs' },
+          estimatedSavingsKg: { type: 'NUMBER', description: 'Estimated carbon savings if the user follows this advice (can be 0 or negative)' }
+        },
+        required: ['title', 'description', 'estimatedSavingsKg']
+      }
+    }
+  },
+  required: ['insights']
+} as const;
+
+/** Prompt sent to Gemini to generate personalized insights based on carbon logs. */
+export const INSIGHTS_PROMPT = 
+  'Analyze these recent carbon logs for the user. Generate exactly 3 personalized, actionable insights or recommendations to help them reduce their carbon footprint further. Format the output to match the schema.';

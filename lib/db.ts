@@ -26,11 +26,15 @@ if (!global.mongooseCache) {
  * a new connection on every request by caching the connection globally.
  *
  * @returns The active Mongoose connection instance.
- * @throws If the connection fails after retries.
+ * @throws {Error} If MONGODB_URI is undefined or connection fails.
  */
 export async function connectToDatabase(): Promise<typeof mongoose> {
   if (cached.conn) {
     return cached.conn;
+  }
+
+  if (!MONGODB_URI) {
+    throw new Error('MONGODB_URI is not defined in environment variables');
   }
 
   if (!cached.promise) {

@@ -20,6 +20,7 @@ import TelemetryPanel from '@/components/features/TelemetryPanel';
 import MetricsDashboard from '@/components/features/MetricsDashboard';
 import SectorBreakdown from '@/components/features/SectorBreakdown';
 import HistoryTable from '@/components/features/HistoryTable';
+import PersonalizedInsights from '@/components/features/PersonalizedInsights';
 
 // Constants
 import { OASIS_THRESHOLD } from '@/constants';
@@ -285,6 +286,8 @@ export default function Dashboard() {
               categoryEmissions={dashboard.metrics.categoryEmissions}
               totalEmissions={dashboard.metrics.totalEmissions}
             />
+
+            <PersonalizedInsights token={auth.token} />
           </div>
         </main>
 

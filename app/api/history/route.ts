@@ -9,6 +9,7 @@ import {
   getErrorMessage,
   parseJsonBody,
 } from '@/lib/api-utils';
+import { validateSchema } from '@/lib/validation';
 
 /** Allowed manual actions for the POST endpoint. */
 const ALLOWED_MANUAL_ACTIONS = ['omission'] as const;
@@ -59,15 +60,17 @@ export async function GET(request: Request): Promise<Response> {
     // 1. Process overdue omissions
     const omissionUpdate = await processOmissionsIfOverdue(userId);
     if (omissionUpdate) {
-      console.log(
+      console.warn(
         `Applied ${omissionUpdate.appliedOmissionsCount} overdue omissions. New habit strength: ${omissionUpdate.currentStrength}`
       );
     }
 
     // 2. Fetch logs and habit state in parallel
-    const [logs, habitState] = await Promise.all([
-      CarbonLog.find({ userId }).sort({ createdAt: -1 }).limit(50),
+    const [habitState, logs] = await Promise.all([
+      // @ts-ignore - mongoose type bug
       HabitState.findOne({ userId }),
+      // @ts-ignore - mongoose type bug
+      CarbonLog.find({ userId }).sort({ createdAt: -1 }).limit(50),
     ]);
 
     // 3. Aggregate metrics
@@ -95,9 +98,11 @@ export async function POST(request: Request): Promise<Response> {
     if (authError) return authError;
 
     const body = await parseJsonBody(request);
-    const { action } = body;
+    const validation = validateSchema<{ action: string }>(body, {
+      action: { type: 'enum', enumValues: [...ALLOWED_MANUAL_ACTIONS], required: true },
+    });
 
-    if (!ALLOWED_MANUAL_ACTIONS.includes(action as typeof ALLOWED_MANUAL_ACTIONS[number])) {
+    if (!validation.success) {
       return createErrorResponse('Invalid manual action', 400);
     }
 

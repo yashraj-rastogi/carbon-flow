@@ -53,7 +53,7 @@ export default function VoiceRecorder({
                 key={`wave-${i}`}
                 className="w-1 bg-rose-500 rounded-full"
                 style={{ height: 16 }}
-                animate={{ height: [8, waveHeights[i % waveHeights.length], 8] }}
+                animate={{ height: [8, waveHeights[i % waveHeights.length] || 16, 8] }}
                 transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.08 }}
               />
             ))}

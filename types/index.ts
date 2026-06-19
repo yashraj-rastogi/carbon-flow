@@ -138,6 +138,51 @@ export interface ActionLogResponse {
 
 // ─── Telemetry ──────────────────────────────────────────────
 
+/** Type definition for a Gemini API structured response schema. */
+export interface GeminiSchemaProperty {
+  type: string;
+  description?: string;
+}
+
+export interface GeminiSchema {
+  type: string;
+  properties: Record<string, GeminiSchemaProperty>;
+  required?: string[];
+}
+
+export interface VoiceExtractionData extends Record<string, unknown> {
+  transcript?: string;
+  actionType?: string;
+  quantity?: number;
+  units?: string;
+  carbonDeltaKg?: number;
+  confidenceScore?: number;
+  explanation?: string;
+}
+
+export interface BillExtractionData extends Record<string, unknown> {
+  utilityCompany?: string;
+  billingPeriod?: string;
+  amountDue?: number;
+  consumption?: number;
+  units?: string;
+  zipCode?: string;
+  state?: string;
+  billType?: string;
+  confidenceScore?: number;
+  explanation?: string;
+}
+
+export interface InsightItem {
+  title: string;
+  description: string;
+  estimatedSavingsKg: number;
+}
+
+export interface InsightsExtractionData extends Record<string, unknown> {
+  insights?: InsightItem[];
+}
+
 /** Token usage metadata from a Gemini API call. */
 export interface TokenUsage {
   promptTokens: number;

@@ -8,6 +8,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { CONFIDENCE_THRESHOLD, GEMINI_MODEL_FLASH, GEMINI_MODEL_PRO } from '@/constants';
+import type { GeminiSchema } from '@/types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -40,7 +41,7 @@ export async function callGemini(
   base64Data: string,
   mimeType: string,
   prompt: string,
-  schema: Record<string, unknown>
+  schema: GeminiSchema
 ): Promise<GeminiExtractionResult> {
   const response = await ai.models.generateContent({
     model,
@@ -82,7 +83,7 @@ export async function extractWithCascade(
   base64Data: string,
   mimeType: string,
   prompt: string,
-  schema: Record<string, unknown>
+  schema: GeminiSchema
 ): Promise<GeminiExtractionResult> {
   // Step 1: Try with Flash (fast, cheap)
   const flashResult = await callGemini(
@@ -96,7 +97,7 @@ export async function extractWithCascade(
   // Step 2: Check confidence — cascade to Pro if below threshold
   const confidence = flashResult.data.confidenceScore as number | undefined;
   if (confidence !== undefined && confidence < CONFIDENCE_THRESHOLD) {
-    console.log(
+    console.warn(
       `Low confidence (${confidence}) on Flash extraction. Cascading to Gemini 2.5 Pro...`
     );
     return callGemini(GEMINI_MODEL_PRO, base64Data, mimeType, prompt, schema);
